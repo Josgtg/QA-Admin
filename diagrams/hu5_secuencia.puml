@@ -1,0 +1,37 @@
+@startuml
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+participant "Interfaz" as UI
+participant "p: Proyecto" as Proyecto
+participant "tqa: TecnicaQA" as Tecnica
+participant "st: SeguimientoTecnica" as SegTecnica
+participant "sp: SeguimientoPaso" as SegPaso
+
+== Selección de Técnica (HU-05) ==
+
+Encargado -> UI: Selecciona una técnica
+UI -> Proyecto: seleccionarTecnica(tqa)
+activate Proyecto
+
+Proyecto -> SegTecnica: new(p, tqa)
+activate SegTecnica
+
+SegTecnica -> Tecnica: obtenerPasos()
+activate Tecnica
+Tecnica --> SegTecnica: List<Paso>
+deactivate Tecnica
+
+loop "por cada Paso obtenido"
+    SegTecnica -> SegPaso: new(st, paso)
+end
+
+SegTecnica --> Proyecto: st instanciado
+deactivate SegTecnica
+
+Proyecto --> UI: técnica asignada exitosamente
+deactivate Proyecto
+UI --> Encargado: Muestra la técnica en el seguimiento del proyecto
+
+@enduml
