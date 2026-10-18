@@ -101,6 +101,9 @@ class Proyecto(models.Model):
             proyecto=self,
             tecnica=tqa,
         )
+        if not seguimiento.activa:
+            seguimiento.activa = True
+            seguimiento.save(update_fields=['activa'])
         pasos_registrados = set(
             seguimiento.pasos.values_list('paso_id', flat=True)
         )
@@ -114,7 +117,14 @@ class Proyecto(models.Model):
         return seguimiento
 
     def remover_tecnica(self, seguimiento_id):
-        self.seguimientos.filter(pk=seguimiento_id).delete()
+        seguimiento = self.seguimientos.filter(pk=seguimiento_id).first()
+        if not seguimiento:
+            return
+        if seguimiento.tiene_evidencias_registradas():
+            seguimiento.activa = False
+            seguimiento.save(update_fields=['activa'])
+        else:
+            seguimiento.delete()
 
 
 class SeguimientoTecnica(models.Model):
@@ -129,6 +139,7 @@ class SeguimientoTecnica(models.Model):
         related_name='seguimientos',
     )
     porcentaje_avance = models.FloatField(default=0.0)
+    activa = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = 'seguimiento de técnica'

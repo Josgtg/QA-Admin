@@ -1,0 +1,283 @@
+{% extends 'base.html' %}
+
+{% block title %}Técnicas QA · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h2>Seguimiento de Técnicas QA</h2>
+        <p class="subtitle">
+            Marca las técnicas que aplicará el proyecto
+            {% if proyecto %} · {{ proyecto.nombre }}{% endif %}
+        </p>
+    </div>
+    {% if proyectos %}
+    <form method="get" action="{% url 'tecnicas:seguimiento' %}" class="inline-form">
+        {% if catalogo %}
+        <input type="hidden" name="catalogo" value="{{ catalogo.pk }}">
+        {% endif %}
+        <label class="sr-only" for="proyecto-select">Proyecto</label>
+        <select id="proyecto-select" name="proyecto" class="select-input" onchange="this.form.submit()">
+            {% for item in proyectos %}
+            <option value="{{ item.pk }}" {% if proyecto and item.pk == proyecto.pk %}selected{% endif %}>
+                {{ item.nombre }}
+            </option>
+            {% endfor %}
+        </select>
+    </form>
+    {% endif %}
+</div>
+
+{% if messages %}
+<div class="flash-stack">
+    {% for message in messages %}
+    <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if not proyecto %}
+<section class="card empty-state">
+    <svg class="icon empty-icon"><use href="#i-techniques"></use></svg>
+    <h3>No hay un proyecto seleccionado</h3>
+    <p>Registra un proyecto y vuelve a esta pantalla para seleccionar sus técnicas de QA.</p>
+</section>
+{% else %}
+<form method="post" id="seleccion-form">
+    {% csrf_token %}
+    <input type="hidden" name="proyecto_id" value="{{ proyecto.pk }}">
+    {% for tecnica_id in tecnicas_ocultas_seleccionadas %}
+    <input type="hidden" name="tecnicas" value="{{ tecnica_id }}">
+    {% endfor %}
+
+    <div class="dims">
+        {% for grupo in grupos %}
+        <article class="dim-card dim-{{ grupo.color }}">
+            <div class="dim-head">
+                <span class="dim-icon"><svg class="icon"><use href="#{{ grupo.icon }}"></use></svg></span>
+                <span class="dim-name">{{ grupo.label }}</span>
+                <span class="dim-count {{ grupo.color }}">{{ grupo.seleccionadas_count }}/{{ grupo.total }}</span>
+            </div>
+            <div class="dim-meta">
+                <div class="bar"><span class="fill-{{ grupo.color }}" style="width: {{ grupo.porcentaje }}%"></span></div>
+                <b>{{ grupo.seleccionadas_count }} seleccionadas</b>
+            </div>
+            {% if grupo.sin_tecnicas %}
+            <p class="dim-warning">Sin técnicas seleccionadas</p>
+            {% else %}
+            <p class="dim-active">En seguimiento</p>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+
+    {% if dimensiones_sin_tecnicas %}
+    <div class="notice notice-warning">
+        <svg class="icon"><use href="#i-alert-circle"></use></svg>
+        <p>
+            Hay dimensiones sin técnicas: {{ dimensiones_sin_tecnicas|join:", " }}.
+            Se muestran con un aviso, pero puedes guardar la selección de todos modos.
+        </p>
+    </div>
+    {% endif %}
+
+    <div class="filter-row">
+        <span class="filter-label">Filtrar por dimensión:</span>
+        <a class="chip {% if not dimension_seleccionada %}active{% endif %}"
+           href="{% url 'tecnicas:seguimiento' %}?proyecto={{ proyecto.pk }}{% if catalogo %}&catalogo={{ catalogo.pk }}{% endif %}">
+            Todas
+        </a>
+        {% for valor, etiqueta in dimensiones %}
+        <a class="chip {% if dimension_seleccionada == valor %}active{% endif %}"
+           href="{% url 'tecnicas:seguimiento' %}?proyecto={{ proyecto.pk }}{% if catalogo %}&catalogo={{ catalogo.pk }}{% endif %}&dimension={{ valor }}">
+            {{ etiqueta }}
+        </a>
+        {% endfor %}
+    </div>
+
+    <section class="card table-card tech-table-card">
+        <div class="table-wrap">
+            <table class="data tech-table">
+                <thead>
+                    <tr>
+                        <th class="check-col"><span class="sr-only">Seleccionar</span></th>
+                        <th>Técnica</th>
+                        <th>Dimensión</th>
+                        <th>Tipo de control</th>
+                        <th>Pasos</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tecnica in tecnicas %}
+                    <tr class="{% if tecnica.pk in seleccionadas_ids %}selected-row{% endif %}">
+                        <td class="check-col">
+                            <input type="checkbox"
+                                   class="tech-checkbox"
+                                   name="tecnicas"
+                                   value="{{ tecnica.pk }}"
+                                   aria-label="Seleccionar {{ tecnica.nombre }}"
+                                   {% if tecnica.pk in seleccionadas_ids %}checked{% endif %}>
+                        </td>
+                        <td>
+                            <div class="cell-title">{{ tecnica.nombre }}</div>
+                            <div class="cell-sub">{{ tecnica.descripcion|truncatechars:90 }}</div>
+                        </td>
+                        <td>
+                            <span class="dim-tag {% if tecnica.dimension == 'ESPECIFICACION' %}blue{% elif tecnica.dimension == 'DISENO' %}purple{% elif tecnica.dimension == 'DESARROLLO' %}green{% else %}orange{% endif %}">
+                                {{ tecnica.get_dimension_display }}
+                            </span>
+                        </td>
+                        <td>{{ tecnica.get_tipo_control_display }}</td>
+                        <td>{{ tecnica.pasos.count }}</td>
+                        <td>
+                            {% if tecnica.pk in seleccionadas_ids %}
+                            <span class="status green">En seguimiento</span>
+                            {% else %}
+                            <span class="status gray">Disponible</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty-row">
+                                No hay técnicas en el catálogo para esta selección.
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="form-actions">
+        <p class="form-hint">
+            Las dimensiones sin técnicas se señalan, pero la selección se puede guardar.
+        </p>
+        <button class="btn btn-primary" type="submit">
+            <svg class="icon icon-sm"><use href="#i-check-circle"></use></svg>
+            Guardar selección
+        </button>
+    </div>
+
+    <section class="card section-gap">
+        <div class="card-head">
+            <h3>Técnicas en seguimiento</h3>
+            <span class="head-muted">{{ seguimientos|length }} técnica{{ seguimientos|length|pluralize:"s" }}</span>
+        </div>
+
+        {% for grupo in grupos %}
+        {% if grupo.seleccionadas %}
+        <div class="tracking-group">
+            <div class="tracking-head">
+                <span class="dim-tag {{ grupo.color }}">{{ grupo.label }}</span>
+                <span class="head-muted">{{ grupo.seleccionadas_count }} técnica{{ grupo.seleccionadas_count|pluralize:"s" }}</span>
+            </div>
+            {% for seguimiento in grupo.seleccionadas %}
+            <div class="tracking-item">
+                <div class="tracking-main">
+                    <div class="cell-title">{{ seguimiento.tecnica.nombre }}</div>
+                    <div class="cell-sub">{{ seguimiento.tecnica.get_tipo_control_display }}</div>
+                </div>
+                <div class="tracking-progress">
+                    <div class="bar"><span class="fill-{{ grupo.color }}" style="width: {{ seguimiento.porcentaje_avance }}%"></span></div>
+                    <span class="coverage-value">{{ seguimiento.porcentaje_avance }}%</span>
+                </div>
+                <div class="tracking-evidence">
+                    {% if seguimiento.tiene_evidencias_registradas %}
+                    <span class="status-icon green">
+                        <svg class="icon icon-xs"><use href="#i-check-circle"></use></svg>
+                        Con evidencias
+                    </span>
+                    {% else %}
+                    <span class="status-icon gray">
+                        <svg class="icon icon-xs"><use href="#i-clock"></use></svg>
+                        Sin evidencias
+                    </span>
+                    {% endif %}
+                </div>
+                <button type="submit"
+                        name="quitar"
+                        value="{{ seguimiento.pk }}"
+                        class="icon-btn"
+                        title="Quitar técnica"
+                        data-tecnica="{{ seguimiento.tecnica.nombre }}"
+                        data-evidencia="{% if seguimiento.tiene_evidencias_registradas %}true{% else %}false{% endif %}">
+                    <svg class="icon"><use href="#i-trash"></use></svg>
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endfor %}
+
+        {% if not seguimientos %}
+        <div class="empty-row">Este proyecto todavía no tiene técnicas en seguimiento.</div>
+        {% endif %}
+    </section>
+</form>
+
+{{ tecnicas_con_evidencia|json_script:"tecnicas-con-evidencia" }}
+{{ seleccionadas_ids|json_script:"tecnicas-seleccionadas" }}
+<script>
+(function () {
+    const form = document.getElementById('seleccion-form');
+    if (!form) {
+        return;
+    }
+
+    const evidencias = new Set(
+        JSON.parse(document.getElementById('tecnicas-con-evidencia').textContent || '[]').map(Number)
+    );
+    const iniciales = new Set(
+        JSON.parse(document.getElementById('tecnicas-seleccionadas').textContent || '[]').map(Number)
+    );
+    let confirmacionAceptada = false;
+
+    form.addEventListener('click', function (event) {
+        const boton = event.target.closest('button[name="quitar"]');
+        if (!boton || boton.dataset.evidencia !== 'true') {
+            return;
+        }
+        const nombre = boton.dataset.tecnica || 'esta técnica';
+        const mensaje = '"' + nombre + '" tiene evidencias registradas. ' +
+            '¿Quieres quitarla? Las evidencias se conservarán.';
+        if (!window.confirm(mensaje)) {
+            event.preventDefault();
+            return;
+        }
+        confirmacionAceptada = true;
+    });
+
+    form.addEventListener('submit', function (event) {
+        if (confirmacionAceptada || (event.submitter && event.submitter.name === 'quitar')) {
+            return;
+        }
+
+        const marcadas = new Set(
+            Array.from(form.querySelectorAll('input[name="tecnicas"]'))
+                .filter(function (input) {
+                    return input.type === 'hidden' || input.checked;
+                })
+                .map(function (input) {
+                    return Number(input.value);
+                })
+        );
+        const retiradasConEvidencia = Array.from(iniciales).filter(function (id) {
+            return !marcadas.has(id) && evidencias.has(id);
+        });
+
+        if (retiradasConEvidencia.length) {
+            const mensaje = 'Vas a quitar técnicas que tienen evidencias registradas. ' +
+                '¿Quieres continuar? Las evidencias se conservarán.';
+            if (!window.confirm(mensaje)) {
+                event.preventDefault();
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}
