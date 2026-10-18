@@ -1,0 +1,51 @@
+@startuml
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer"
+participant "CatalogoModelosTemplate" as UI
+end box
+
+box "View Layer (modelos.view)"
+participant "CatalogoModelosView" as View
+end box
+
+box "Model Layer (modelos.model)"
+participant "ModeloCalidad" as Modelos
+participant "m: ModeloCalidad" as Modelo
+participant "c: Caracteristica" as Caracteristica
+end box
+
+== Catálogo de modelos de calidad predefinidos (HU-03) ==
+
+Encargado -> UI: Abre el catálogo de modelos de calidad
+UI -> View: get(req: HttpRequest)
+activate View
+
+View -> Modelos: obtenerPredefinidos()
+activate Modelos
+Modelos --> View: List<ModeloCalidad>
+deactivate Modelos
+
+loop "por cada ModeloCalidad"
+    View -> Modelo: obtenerCaracteristicas()
+    activate Modelo
+    Modelo --> View: List<Caracteristica>
+    deactivate Modelo
+
+    loop "por cada Caracteristica"
+        View -> Caracteristica: obtenerMetricas()
+        activate Caracteristica
+        Caracteristica --> View: List<Metrica>
+        deactivate Caracteristica
+    end
+end
+
+View --> UI: HttpResponse (200 OK)
+deactivate View
+
+UI --> Encargado: Muestra los 4 modelos con sus métricas y metas
+
+@enduml
