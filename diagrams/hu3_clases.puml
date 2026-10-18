@@ -1,0 +1,59 @@
+@startuml
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype polyline
+
+package "modelos.template" <<Rectangle>> {
+  class CatalogoModelosTemplate {
+  }
+}
+
+package "modelos.view" <<Rectangle>> {
+  class CatalogoModelosView {
+    + obtenerModelosBase(): List<ModeloCalidad>
+  }
+}
+
+package "modelos.model" <<Rectangle>> {
+  enum TipoUmbral {
+    MINIMO
+    MAXIMO
+  }
+
+  class ModeloCalidad {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - predefinido: boolean
+    + {static} obtenerPredefinidos(): List<ModeloCalidad>
+    + obtenerCaracteristicas(): List<Caracteristica>
+  }
+
+  class Caracteristica {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    + obtenerMetricas(): List<Metrica>
+  }
+
+  class Metrica {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - unidad: String
+    - meta: Float
+    - tipoUmbral: TipoUmbral
+    - activa: boolean
+    + cumpleMeta(valor: Float): boolean
+  }
+}
+
+' Relaciones internas de modelos
+ModeloCalidad "1" *-- "1..*" Caracteristica
+Caracteristica "1" *-- "1..*" Metrica
+Metrica "*" --> "1" TipoUmbral
+
+' Relaciones MVT
+CatalogoModelosTemplate ..> CatalogoModelosView : dispara solicitud >
+CatalogoModelosView ..> ModeloCalidad : consulta >
+@enduml
