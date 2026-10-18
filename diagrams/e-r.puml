@@ -1,0 +1,142 @@
+@startuml er_mvp_calidad
+hide circle
+skinparam shadowing false
+skinparam linetype polyline
+skinparam nodesep 50
+skinparam ranksep 50
+skinparam packageStyle rectangle
+skinparam entity {
+  BackgroundColor White
+}
+
+title E-R general del MVP de calidad (Django MVT: apps reportes, modelos y tecnicas)
+
+package "app: reportes" #FAEEDA {
+  entity "Persona" as Persona {
+    *id
+    --
+    nombre
+  }
+
+  entity "Proyecto" as Proyecto {
+    *id
+    --
+    nombre
+    fecha_inicio
+    fecha_fin
+  }
+
+  entity "MiembroProyecto" as MiembroProyecto {
+    *id
+    --
+    rol
+    activo
+  }
+}
+
+package "app: modelos" #EEEDFE {
+  entity "Caracteristica" as Caracteristica {
+    *id
+    --
+    nombre
+    descripcion
+  }
+
+  entity "Metrica" as Metrica {
+    *id
+    --
+    nombre
+    descripcion
+    valor_min
+    valor_max
+  }
+
+  entity "ModeloCalidad" as ModeloCalidad {
+    *id
+    --
+    nombre
+    descripcion
+  }
+
+  entity "ModeloMetrica" as ModeloMetrica {
+    *id
+    --
+    umbral
+    activa
+  }
+
+  entity "ModeloAplicado" as ModeloAplicado {
+    *id
+  }
+
+  entity "RevisionMetrica" as RevisionMetrica {
+    *id
+    --
+    valor
+    fecha
+    enlace
+    archivo
+    cumple
+  }
+}
+
+package "app: tecnicas" #E1F5EE {
+  entity "TecnicaQA" as TecnicaQA {
+    *id
+    --
+    nombre
+    descripcion
+    objetivo
+    pregunta_clave
+    dimension
+    tipo_control
+  }
+
+  entity "SeguimientoTecnica" as SeguimientoTecnica {
+    *id
+    --
+    activa
+  }
+
+  entity "Evidencia" as Evidencia {
+    *id
+    --
+    enlace
+    archivo
+    fecha_registro
+  }
+}
+
+Persona ||--o{ MiembroProyecto : "participa como"
+Proyecto ||--o{ MiembroProyecto : tiene
+
+Caracteristica ||--o{ Metrica : agrupa
+ModeloCalidad ||--o{ ModeloMetrica : incluye
+Metrica ||--o{ ModeloMetrica : "se configura en"
+Proyecto ||--o| ModeloAplicado : aplica
+ModeloCalidad ||--o{ ModeloAplicado : "se usa en"
+Proyecto ||--o{ RevisionMetrica : registra
+Metrica ||--o{ RevisionMetrica : "es revisada en"
+MiembroProyecto ||--o{ RevisionMetrica : "autor de"
+
+Proyecto ||--o{ SeguimientoTecnica : sigue
+TecnicaQA ||--o{ SeguimientoTecnica : "se elige en"
+SeguimientoTecnica ||--o{ Evidencia : "se respalda con"
+MiembroProyecto ||--o{ Evidencia : "autor de"
+
+note bottom of MiembroProyecto
+  Todo autor (de una RevisionMetrica o de una
+  Evidencia) debe ser MiembroProyecto del
+  mismo Proyecto. Se valida en clean().
+end note
+
+note bottom of Proyecto
+  El periodo es un estado derivado de las fechas
+  (futuro, activo o terminado); no se guarda.
+end note
+
+note bottom of Evidencia
+  En el detalle, cada Evidencia respalda un paso
+  del seguimiento (ver diagrama de clases).
+end note
+@enduml
