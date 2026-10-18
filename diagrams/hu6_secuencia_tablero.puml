@@ -1,0 +1,84 @@
+@startuml seq_hu06_04_tablero
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as QA
+
+box "Template Layer"
+participant "PrevisualizacionProyectoTemplate" as PreviewUI
+participant "TableroProyectoTemplate" as TableroUI
+end box
+
+box "View Layer (reportes.view)"
+participant "ListaProyectosView" as ListaView
+participant "TableroProyectoView" as TableroView
+end box
+
+box "Model Layer (reportes.model / modelos.model / tecnicas.model)"
+participant "p: Proyecto" as Proyecto
+participant "rm: RevisionMetrica" as Revision
+participant "st: SeguimientoTecnica" as Seguimiento
+end box
+
+== CA3 · Entrar al tablero ==
+
+QA -> PreviewUI: Clic en "Consultar"
+PreviewUI -> ListaView: ir_a_tablero(proyecto)
+activate ListaView
+ListaView --> QA: Redirect · TableroProyectoView.get(id)
+deactivate ListaView
+
+TableroView -> Proyecto: objects.get(pk)
+activate Proyecto
+Proyecto --> TableroView: proyecto
+deactivate Proyecto
+
+== CA4 · Cargar solo los datos de este proyecto ==
+
+TableroView -> Proyecto: equipo_activo()
+activate Proyecto
+Proyecto --> TableroView: QuerySet<MiembroProyecto>
+deactivate Proyecto
+
+TableroView -> Proyecto: revisiones()
+activate Proyecto
+Proyecto -> Revision: filter(proyecto_id=self.id)
+activate Revision
+Revision --> Proyecto: QuerySet<RevisionMetrica>
+deactivate Revision
+Proyecto --> TableroView: QuerySet<RevisionMetrica>
+deactivate Proyecto
+
+TableroView -> Proyecto: seguimientos()
+activate Proyecto
+Proyecto -> Seguimiento: filter(proyecto_id=self.id)
+activate Seguimiento
+Seguimiento --> Proyecto: QuerySet<SeguimientoTecnica>
+deactivate Seguimiento
+Proyecto --> TableroView: QuerySet<SeguimientoTecnica>
+deactivate Proyecto
+
+TableroView -> Proyecto: indice_salud()
+activate Proyecto
+Proyecto --> TableroView: Float
+deactivate Proyecto
+
+TableroView -> TableroUI: render(proyecto, equipo, revisiones, seguimientos, salud)
+TableroUI --> QA: 200 OK · tablero del proyecto
+
+note right of TableroView
+  CA4 · El tablero solo accede a los datos
+  vía métodos del Proyecto. Los querysets
+  están filtrados por self.id, así que es
+  estructuralmente imposible mostrar filas
+  de otro proyecto aunque el template itere
+  de más.
+end note
+
+note over TableroUI
+  El tablero no permite cambiar de
+  proyecto. Para ver otro, se vuelve a
+  la lista (Flujo 5) y se selecciona.
+end note
+
+@enduml

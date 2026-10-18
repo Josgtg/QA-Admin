@@ -1,0 +1,93 @@
+@startuml seq_hu06_01_lista
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as QA
+
+box "Template Layer"
+participant "ListaProyectosTemplate" as ListaUI
+participant "PrevisualizacionProyectoTemplate" as PreviewUI
+participant "EstadoVacioTemplate" as VacioUI
+end box
+
+box "View Layer (reportes.view)"
+participant "ListaProyectosView" as ListaView
+end box
+
+box "Model Layer (reportes.model)"
+participant "p: Proyecto" as Proyecto
+participant "mp: MiembroProyecto" as Miembro
+end box
+
+== CA1 · Listar proyectos del QA ==
+
+QA -> ListaUI: Abre la lista de proyectos
+ListaUI -> ListaView: get(request)
+activate ListaView
+
+ListaView -> Proyecto: objects.all()
+activate Proyecto
+Proyecto --> ListaView: QuerySet<Proyecto>
+deactivate Proyecto
+
+ListaView -> ListaView: hay_proyectos()
+
+alt sin proyectos
+    ListaView -> VacioUI: render(invitacion)
+    VacioUI --> QA: 200 OK · invita a crear el primero
+else con proyectos
+    loop por cada proyecto
+        ListaView -> Proyecto: periodo()
+        activate Proyecto
+        Proyecto --> ListaView: String
+        deactivate Proyecto
+
+        ListaView -> Proyecto: indice_salud()
+        activate Proyecto
+        Proyecto --> ListaView: Float
+        deactivate Proyecto
+    end
+
+    ListaView -> ListaUI: render(proyectos)
+    ListaUI --> QA: 200 OK · nombre, periodo e índice de salud
+end
+
+deactivate ListaView
+
+== CA1 · Previsualizar un proyecto sin salir de la lista ==
+
+QA -> ListaUI: Selecciona un proyecto
+ListaUI -> ListaView: seleccionar(proyecto_id)
+activate ListaView
+
+ListaView -> Proyecto: objects.get(pk)
+activate Proyecto
+Proyecto --> ListaView: proyecto
+deactivate Proyecto
+
+ListaView -> Proyecto: indice_salud()
+activate Proyecto
+Proyecto --> ListaView: Float
+deactivate Proyecto
+
+ListaView -> Proyecto: equipo_activo()
+activate Proyecto
+Proyecto -> Miembro: filter(activo=True)
+activate Miembro
+Miembro --> Proyecto: QuerySet<MiembroProyecto>
+deactivate Miembro
+Proyecto --> ListaView: QuerySet<MiembroProyecto>
+deactivate Proyecto
+
+ListaView -> PreviewUI: render(nombre, salud, fechas, equipo)
+PreviewUI --> QA: panel actualizado
+
+note right of ListaView
+  La selección solo cambia el panel.
+  El QA puede seguir seleccionando
+  otros proyectos sin abrir el tablero.
+end note
+
+deactivate ListaView
+
+@enduml

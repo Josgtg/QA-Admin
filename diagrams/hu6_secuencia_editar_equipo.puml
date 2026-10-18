@@ -1,0 +1,122 @@
+@startuml seq_hu06_03_editar
+
+skinparam shadowing false
+
+
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as QA
+
+box "Template Layer"
+participant "PrevisualizacionProyectoTemplate" as PreviewUI
+participant "ProyectoFormTemplate" as FormUI
+end box
+
+box "View Layer (reportes.view)"
+participant "ListaProyectosView" as ListaView
+participant "EditarProyectoView" as EditarView
+end box
+
+box "Model Layer (reportes.model)"
+participant "p: Proyecto" as Proyecto
+participant "mp: MiembroProyecto" as Miembro
+end box
+
+== CA2 · Abrir edición desde la previsualización ==
+
+QA -> PreviewUI: Clic en "Editar equipo"
+PreviewUI -> ListaView: ir_a_editar(proyecto)
+activate ListaView
+ListaView --> QA: Redirect · EditarProyectoView.get()
+deactivate ListaView
+
+EditarView -> Proyecto: objects.get(pk)
+activate Proyecto
+Proyecto --> EditarView: proyecto
+deactivate Proyecto
+
+EditarView -> Proyecto: miembros_todos()
+activate Proyecto
+Proyecto -> Miembro: all()
+activate Miembro
+Miembro --> Proyecto: QuerySet<MiembroProyecto> (activos e inactivos)
+deactivate Miembro
+Proyecto --> EditarView: QuerySet<MiembroProyecto>
+deactivate Proyecto
+
+EditarView -> FormUI: render(proyecto, miembros)
+FormUI --> QA: formulario con el equipo actual
+
+== CA2 · Gestionar el equipo ==
+
+alt agregar miembro
+    QA -> FormUI: Nueva fila (Persona, rol)
+    FormUI -> EditarView: agregar_miembro(proyecto, persona, rol)
+    activate EditarView
+    EditarView -> Proyecto: agregar_miembro(persona, rol)
+    activate Proyecto
+    Proyecto -> Miembro: new(...) + clean()
+    activate Miembro
+    Miembro --> Proyecto: mp
+    deactivate Miembro
+    Proyecto --> EditarView: miembro
+    deactivate Proyecto
+    EditarView --> QA: miembro agregado
+    deactivate EditarView
+
+else cambiar rol
+    QA -> FormUI: Nuevo rol en una fila
+    FormUI -> EditarView: actualizar_rol(miembro, rol)
+    activate EditarView
+    EditarView -> Miembro: cambiar_rol(rol)
+    activate Miembro
+    Miembro --> EditarView: ok
+    deactivate Miembro
+    EditarView --> QA: rol actualizado
+    deactivate EditarView
+
+else desactivar miembro
+    QA -> FormUI: Clic en "Desactivar"
+    FormUI -> EditarView: desactivar_miembro(miembro)
+    activate EditarView
+    EditarView -> Miembro: desactivar()
+    activate Miembro
+    note right of Miembro
+      Baja lógica: activo = False.
+      El registro se conserva para
+      no romper RevisionMetrica ni
+      Evidencia que lo referencian.
+    end note
+    Miembro --> EditarView: ok
+    deactivate Miembro
+    EditarView --> QA: miembro desactivado
+    deactivate EditarView
+
+else reactivar miembro
+    QA -> FormUI: Clic en "Reactivar" sobre un miembro inactivo
+    FormUI -> EditarView: reactivar_miembro(miembro)
+    activate EditarView
+    EditarView -> Miembro: reactivar()
+    activate Miembro
+    note right of Miembro
+      Alta lógica: activo = True.
+      Vuelve a aparecer en
+      equipo_activo() y por tanto
+      en la previsualización.
+      No crea fila nueva: reutiliza
+      el MiembroProyecto existente,
+      por lo que no viola
+      UNIQUE(persona, proyecto).
+    end note
+    Miembro --> EditarView: ok
+    deactivate Miembro
+    EditarView --> QA: miembro reactivado
+    deactivate EditarView
+end
+
+note over EditarView
+  Al volver a ListaProyectosView la previsualizacion
+  usa equipoActivo() y ya refleja la reactivacion:
+  el miembro vuelve a aparecer.
+end note
+@enduml
