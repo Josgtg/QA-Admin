@@ -1,0 +1,42 @@
+@startuml
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype polyline
+
+package "reportes.template" <<Rectangle>> {
+  class ListaProyectosTemplate {
+  }
+}
+
+package "reportes.view" <<Rectangle>> {
+  class ListaProyectosView {
+    + listarProyectos(periodoId: int)
+  }
+}
+
+package "reportes.model" <<Rectangle>> {
+  class Periodo {
+    - id: int
+    - nombre: String
+    - fechaInicio: Date
+    - fechaFin: Date
+    + {static} obtenerRecientes(): List<Periodo>
+    + obtenerProyectos(): List<Proyecto>
+  }
+}
+
+package "tecnicas.model" <<Rectangle>> {
+  class Proyecto {
+    - id: int
+    - nombre: String
+    - periodo: Periodo
+  }
+}
+
+' Relaciones internas de modelos
+Periodo "1" o-right- "0..*" Proyecto
+
+' Relaciones MVT
+ListaProyectosTemplate ..> ListaProyectosView : dispara solicitud >
+ListaProyectosView ..> Periodo : consulta >
+@enduml
