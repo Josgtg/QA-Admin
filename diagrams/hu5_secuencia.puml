@@ -9,7 +9,7 @@ participant "SeleccionTecnicaTemplate" as UI
 end box
 
 box "View Layer (tecnicas.view)"
-participant "TecnicasView" as View
+participant "SeguirTecnicaView" as View
 end box
 
 box "Model Layer (tecnicas.model)"
@@ -22,7 +22,7 @@ end box
 == Selección de Técnica (HU-05) ==
 
 Encargado -> UI: Selecciona una técnica
-UI -> View: seguirTecnica(req: HttpRequest)
+UI -> View: post(req: HttpRequest)
 activate View
 
 View -> Proyecto: seguirTecnica(tqa)
