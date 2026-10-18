@@ -3,74 +3,88 @@ skinparam classAttributeIconSize 0
 skinparam shadowing false
 skinparam linetype polyline
 
-enum Dimension {
-  ESPECIFICACION
-  DISENO
-  DESARROLLO
-  CONFORMIDAD
+package "tecnicas.template" <<Rectangle>> {
+  class SeleccionTecnicaTemplate {
+  }
 }
 
-enum TipoControl {
-  VERIFICACION
-  VALIDACION
+package "tecnicas.view" <<Rectangle>> {
+  class TecnicasView {
+    + seguirTecnica(req: HttpRequest) -> HttpResponse
+  }
 }
 
-class CatalogoTQA {
-  + obtenerTecnicasBase(): List<TecnicaQA>
-  + filtrarPorDimension(dim: Dimension): List<TecnicaQA>
+package "tecnicas.model" <<Rectangle>> {
+  enum Dimension {
+    ESPECIFICACION
+    DISENO
+    DESARROLLO
+    CONFORMIDAD
+  }
+
+  enum TipoControl {
+    VERIFICACION
+    VALIDACION
+  }
+
+  class CatalogoTQA {
+    + obtenerTecnicasBase(): List<TecnicaQA>
+    + filtrarPorDimension(dim: Dimension): List<TecnicaQA>
+  }
+
+  abstract class TecnicaQA {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - objetivo: String
+    - preguntaClave: String
+    - dimension: Dimension
+    - tipoControl: TipoControl
+    + {abstract} obtenerPasos(): List<Paso>
+  }
+
+  class Paso {
+    - id: int
+    - orden: int
+    - instruccion: String
+    - evidenciaEsperada: String
+  }
+
+  class Proyecto {
+    - id: int
+    - nombre: String
+    + seguirTecnica(tqa: TecnicaQA): SeguimientoTecnica
+    + removerTecnica(seguimientoId: int): void
+  }
+
+  class SeguimientoTecnica {
+    - id: int
+    - tecnicaActiva: TecnicaQA
+    - porcentajeAvance: Float
+    + tieneEvidenciasRegistradas(): boolean
+    + calcularAvance(): Float
+  }
+
+  class SeguimientoPaso {
+    - id: int
+    - completado: boolean
+    - comentario: String
+    - fechaCompletado: Date
+    - autor: String
+    + agregarEvidencia(e: Evidencia): void
+    + marcarCompletado(): void
+  }
+
+  class Evidencia {
+    - id: int
+    - urlArchivo: String
+    - tipo: TipoControl
+    - fechaRegistro: Date
+    - autor: String
+  }
 }
 
-abstract class TecnicaQA {
-  - id: int
-  - nombre: String
-  - descripcion: String
-  - objetivo: String
-  - preguntaClave: String
-  - dimension: Dimension
-  - tipoControl: TipoControl
-  + {abstract} obtenerPasos(): List<Paso>
-}
-
-class Paso {
-  - id: int
-  - orden: int
-  - instruccion: String
-  - evidenciaEsperada: String
-}
-
-class Proyecto {
-  - id: int
-  - nombre: String
-  + seleccionarTecnica(tqa: TecnicaQA): SeguimientoTecnica
-  + removerTecnica(seguimientoId: int): void
-}
-
-class SeguimientoTecnica {
-  - id: int
-  - tecnicaActiva: TecnicaQA
-  - porcentajeAvance: Float
-  + tieneEvidenciasRegistradas(): boolean
-  + calcularAvance(): Float
-}
-
-class SeguimientoPaso {
-  - id: int
-  - completado: boolean
-  - comentario: String
-  - fechaCompletado: Date
-  - autor: String
-  + agregarEvidencia(e: Evidencia): void
-  + marcarCompletado(): void
-}
-
-class Evidencia {
-  - id: int
-  - urlArchivo: String
-  - tipo: TipoControl
-  - fechaRegistro: Date
-  - autor: String
-}
-
+' Relaciones internas de modelos
 CatalogoTQA "1" o-- "*" TecnicaQA
 TecnicaQA "*" --> "1" Dimension
 TecnicaQA "*" --> "1" TipoControl
@@ -84,4 +98,7 @@ SeguimientoPaso "1" *-- "0..1" Evidencia
 
 Evidencia "*" --> "1" TipoControl
 
+' Relaciones MVT
+SeleccionTecnicaTemplate ..> TecnicasView : dispara solicitud >
+TecnicasView ..> Proyecto : opera sobre >
 @enduml

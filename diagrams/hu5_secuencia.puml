@@ -3,16 +3,29 @@ skinparam shadowing false
 skinparam responseMessageBelowArrow true
 
 actor "Encargado de QA" as Encargado
-participant "Interfaz" as UI
+
+box "Template Layer"
+participant "SeleccionTecnicaTemplate" as UI
+end box
+
+box "View Layer (tecnicas.view)"
+participant "TecnicasView" as View
+end box
+
+box "Model Layer (tecnicas.model)"
 participant "p: Proyecto" as Proyecto
 participant "tqa: TecnicaQA" as Tecnica
 participant "st: SeguimientoTecnica" as SegTecnica
 participant "sp: SeguimientoPaso" as SegPaso
+end box
 
 == Selección de Técnica (HU-05) ==
 
 Encargado -> UI: Selecciona una técnica
-UI -> Proyecto: seleccionarTecnica(tqa)
+UI -> View: seguirTecnica(req: HttpRequest)
+activate View
+
+View -> Proyecto: seguirTecnica(tqa)
 activate Proyecto
 
 Proyecto -> SegTecnica: new(p, tqa)
@@ -30,8 +43,12 @@ end
 SegTecnica --> Proyecto: st instanciado
 deactivate SegTecnica
 
-Proyecto --> UI: técnica asignada exitosamente
+Proyecto --> View: técnica asignada exitosamente
 deactivate Proyecto
+
+View --> UI: HttpResponse (200 OK / Redirect)
+deactivate View
+
 UI --> Encargado: Muestra la técnica en el seguimiento del proyecto
 
 @enduml
