@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+
+{% block title %}Demo · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h2>Demo de Interfaz QA</h2>
+        <p class="subtitle">Base visual para implementar las páginas del proyecto</p>
+    </div>
+    <div class="actions">
+        <button class="btn btn-outline" type="button">Acción secundaria</button>
+        <button class="btn btn-primary" type="button">
+            <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+            Acción principal
+        </button>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <article class="stat-card">
+        <div class="stat-icon blue">
+            <svg class="icon"><use href="#i-clipboard"></use></svg>
+        </div>
+        <div class="stat-value">92%</div>
+        <div class="stat-label">Cumplimiento Controles QA</div>
+    </article>
+    <article class="stat-card">
+        <div class="stat-icon amber">
+            <svg class="icon"><use href="#i-list-check"></use></svg>
+        </div>
+        <div class="stat-value">68%</div>
+        <div class="stat-label">Avance de Revisiones</div>
+    </article>
+    <article class="stat-card">
+        <div class="stat-icon pink">
+            <svg class="icon"><use href="#i-folder"></use></svg>
+        </div>
+        <div class="stat-value">23</div>
+        <div class="stat-label">Evidencias Pendientes</div>
+    </article>
+</div>
+
+<div class="dash-lower section-gap">
+    <section class="card">
+        <div class="card-head">
+            <h3>Métricas de Ejemplo</h3>
+            <a class="link" href="#">Gestionar</a>
+        </div>
+
+        <div class="metric-row border-red">
+            <div class="metric-top">
+                <span>Usabilidad</span>
+                <span class="metric-score red">43/100</span>
+            </div>
+            <div class="bar"><span class="fill-red" style="width: 43%"></span></div>
+        </div>
+
+        <div class="metric-row border-amber">
+            <div class="metric-top">
+                <span>Seguridad</span>
+                <span class="metric-score amber">55/100</span>
+            </div>
+            <div class="bar"><span class="fill-amber" style="width: 55%"></span></div>
+        </div>
+
+        <div class="metric-row border-amber">
+            <div class="metric-top">
+                <span>Mantenibilidad</span>
+                <span class="metric-score amber">61/100</span>
+            </div>
+            <div class="bar"><span class="fill-amber" style="width: 61%"></span></div>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="card-head">
+            <h3>Técnicas de Ejemplo</h3>
+            <a class="link" href="#">Configurar</a>
+        </div>
+
+        <div class="tech-item">
+            <span class="tech-icon blue"><svg class="icon"><use href="#i-pencil"></use></svg></span>
+            <span class="tech-name">Pruebas de Regresión</span>
+            <span class="tech-status green">Activa</span>
+        </div>
+        <div class="tech-item">
+            <span class="tech-icon purple"><svg class="icon"><use href="#i-search"></use></svg></span>
+            <span class="tech-name">Revisión por Pares</span>
+            <span class="tech-status green">Activa</span>
+        </div>
+        <div class="tech-item">
+            <span class="tech-icon amber"><svg class="icon"><use href="#i-clipboard"></use></svg></span>
+            <span class="tech-name">Checklists de Control</span>
+            <span class="tech-status green">Activa</span>
+        </div>
+        <div class="tech-item">
+            <span class="tech-icon pink"><svg class="icon"><use href="#i-shield"></use></svg></span>
+            <span class="tech-name">Análisis Estático</span>
+            <span class="tech-status amber">Parcial</span>
+        </div>
+    </section>
+</div>
+
+<div class="tabs section-gap">
+    <button class="tab active" type="button">Todos (3)</button>
+    <button class="tab" type="button">Activos (2)</button>
+    <button class="tab" type="button">Cerrados (1)</button>
+</div>
+
+<section class="card table-card">
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Proyecto</th>
+                    <th>Estado</th>
+                    <th>Responsable</th>
+                    <th>Cobertura QA</th>
+                    <th>Salud</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <div class="cell-title">Portal Bancario v3.0</div>
+                        <div class="cell-sub">Evaluación trimestral</div>
+                    </td>
+                    <td><span class="status green">Activo</span></td>
+                    <td>Laura Delgado</td>
+                    <td>
+                        <div class="coverage">
+                            <div class="bar"><span class="fill-green" style="width: 85%"></span></div>
+                            <span class="coverage-value">85%</span>
+                        </div>
+                    </td>
+                    <td><span class="status green">Alto</span></td>
+                    <td class="actions-cell">
+                        <button class="icon-btn" type="button" title="Editar"><svg class="icon"><use href="#i-edit"></use></svg></button>
+                        <button class="icon-btn" type="button" title="Ver"><svg class="icon"><use href="#i-eye"></use></svg></button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <div class="cell-title">App Móvil Seguros</div>
+                        <div class="cell-sub">Evaluación mensual</div>
+                    </td>
+                    <td><span class="status green">Activo</span></td>
+                    <td>Fernando Torres</td>
+                    <td>
+                        <div class="coverage">
+                            <div class="bar"><span class="fill-amber" style="width: 62%"></span></div>
+                            <span class="coverage-value">62%</span>
+                        </div>
+                    </td>
+                    <td><span class="status amber">Medio</span></td>
+                    <td class="actions-cell">
+                        <button class="icon-btn" type="button" title="Editar"><svg class="icon"><use href="#i-edit"></use></svg></button>
+                        <button class="icon-btn" type="button" title="Ver"><svg class="icon"><use href="#i-eye"></use></svg></button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <div class="cell-title">Sistema Nómina Legacy</div>
+                        <div class="cell-sub">Evaluación semestral</div>
+                    </td>
+                    <td><span class="status gray">Cerrado</span></td>
+                    <td>Patricia Mendoza</td>
+                    <td>
+                        <div class="coverage">
+                            <div class="bar"><span class="fill-green" style="width: 100%"></span></div>
+                            <span class="coverage-value">100%</span>
+                        </div>
+                    </td>
+                    <td><span class="status green">Alto</span></td>
+                    <td class="actions-cell">
+                        <button class="icon-btn" type="button" title="Ver"><svg class="icon"><use href="#i-eye"></use></svg></button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

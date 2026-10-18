@@ -17,6 +17,9 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
+from qa_admin.views import demo
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('demo/', demo, name='demo'),
 ]
