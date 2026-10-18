@@ -72,6 +72,7 @@ Rutas disponibles:
 | `/admin/` | Administración de Django |
 | `/demo/` | Demo de la interfaz visual |
 | `/tecnicas/seguimiento/` | Selección de técnicas QA por proyecto (HU-05) |
+| `/modelos/` | Catálogo de modelos de calidad predefinidos (HU-03) |
 
 ### 5. Pruebas
 
