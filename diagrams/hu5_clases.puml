@@ -9,8 +9,8 @@ package "tecnicas.template" <<Rectangle>> {
 }
 
 package "tecnicas.view" <<Rectangle>> {
-  class TecnicasView {
-    + seguirTecnica(req: HttpRequest) -> HttpResponse
+  class SeguirTecnicaView {
+    + seguirTecnica(p: Proyecto, tqa: TecnicaQA)
   }
 }
 
@@ -99,6 +99,6 @@ SeguimientoPaso "1" *-- "0..1" Evidencia
 Evidencia "*" --> "1" TipoControl
 
 ' Relaciones MVT
-SeleccionTecnicaTemplate ..> TecnicasView : dispara solicitud >
-TecnicasView ..> Proyecto : opera sobre >
+SeleccionTecnicaTemplate ..> SeguirTecnicaView : dispara solicitud >
+SeguirTecnicaView ..> Proyecto : opera sobre >
 @enduml
