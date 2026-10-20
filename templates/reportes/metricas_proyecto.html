@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+
+{% block title %}Métricas de {{ proyecto.nombre }} · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h2>Métricas · {{ proyecto.nombre }}</h2>
+        <p class="subtitle">Seguimiento de métricas de calidad del proyecto</p>
+    </div>
+    <div class="actions">
+        <a class="btn btn-outline" href="{% url 'reportes:lista' %}">
+            <svg class="icon icon-sm"><use href="#i-projects"></use></svg>
+            Volver a la lista
+        </a>
+        <a class="btn btn-primary" href="{% url 'reportes:tablero' proyecto.pk %}">
+            <svg class="icon icon-sm"><use href="#i-eye"></use></svg>
+            Ir al tablero
+        </a>
+    </div>
+</div>
+
+<section class="card">
+    <div class="empty-state">
+        <svg class="icon empty-icon"><use href="#i-metrics"></use></svg>
+        <h3>Sin métricas registradas</h3>
+        <p>Este proyecto todavía no tiene métricas configuradas ni mediciones.</p>
+    </div>
+</section>
+{% endblock %}

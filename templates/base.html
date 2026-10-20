@@ -128,11 +128,11 @@
     <div class="layout">
         <aside class="sidebar">
             <nav class="sidebar-nav">
-                <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">
+                <a class="nav-link {% if request.resolver_match.url_name == 'tablero' %}active{% endif %}" href="{% url 'inicio' %}">
                     <svg class="icon"><use href="#i-dashboard"></use></svg>
                     <span>Dashboard Principal</span>
                 </a>
-                <a class="nav-link {% if request.path == '/proyectos/' %}active{% endif %}" href="/proyectos/">
+                <a class="nav-link {% if request.resolver_match.app_name == 'reportes' and request.resolver_match.url_name != 'tablero' %}active{% endif %}" href="{% url 'reportes:lista' %}">
                     <svg class="icon"><use href="#i-projects"></use></svg>
                     <span>Registro de Proyectos</span>
                 </a>

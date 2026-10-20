@@ -1,0 +1,199 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if modo == 'crear' %}Crear proyecto{% else %}Editar proyecto · {{ proyecto.nombre }}{% endif %} · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h2>{% if modo == 'crear' %}Crear proyecto{% else %}Editar proyecto · {{ proyecto.nombre }}{% endif %}</h2>
+        <p class="subtitle">
+            {% if modo == 'crear' %}
+            Registra el proyecto y su equipo inicial
+            {% else %}
+            Actualiza los datos, el equipo y los roles del proyecto
+            {% endif %}
+        </p>
+    </div>
+</div>
+
+{% if messages %}
+<div class="flash-stack">
+    {% for message in messages %}
+    <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if modo == 'crear' %}
+<form method="post">
+    {% csrf_token %}
+    <section class="card">
+        <div class="card-head"><h3>Datos del proyecto</h3></div>
+        {% for field in proyecto_form %}
+        <p>
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+            <span class="status red">{{ field.errors }}</span>
+            {% endif %}
+        </p>
+        {% endfor %}
+        {% if proyecto_form.non_field_errors %}
+        <div class="flash flash-error">{{ proyecto_form.non_field_errors }}</div>
+        {% endif %}
+    </section>
+
+    <section class="card section-gap">
+        <div class="card-head"><h3>Equipo inicial</h3></div>
+        {{ equipo_formset.management_form }}
+        {% if equipo_formset.non_form_errors %}
+        <div class="flash flash-error">{{ equipo_formset.non_form_errors }}</div>
+        {% endif %}
+        {% for form in equipo_formset %}
+        <div class="form-row">
+            <div class="form-field field-persona">
+                <label for="{{ form.persona_nombre.id_for_label }}">{{ form.persona_nombre.label }}</label>
+                {{ form.persona_nombre }}
+                {% if form.persona_nombre.errors %}
+                <span class="status red">{{ form.persona_nombre.errors }}</span>
+                {% endif %}
+            </div>
+            <div class="form-field field-rol">
+                <label for="{{ form.rol.id_for_label }}">{{ form.rol.label }}</label>
+                {{ form.rol }}
+                {% if form.rol.errors %}
+                <span class="status red">{{ form.rol.errors }}</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </section>
+
+    <div class="form-actions">
+        <a class="btn btn-outline" href="{% url 'reportes:lista' %}">Cancelar</a>
+        <button class="btn btn-primary" type="submit">
+            <svg class="icon icon-sm"><use href="#i-check-circle"></use></svg>
+            Guardar proyecto
+        </button>
+    </div>
+</form>
+
+{% else %}
+
+<section class="card">
+    <div class="card-head">
+        <h3>Datos del proyecto</h3>
+        <a class="link" href="{% url 'reportes:tablero' proyecto.pk %}">Ir al tablero</a>
+    </div>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="guardar_proyecto">
+        {% for field in proyecto_form %}
+        <p>
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+            <span class="status red">{{ field.errors }}</span>
+            {% endif %}
+        </p>
+        {% endfor %}
+        {% if proyecto_form.non_field_errors %}
+        <div class="flash flash-error">{{ proyecto_form.non_field_errors }}</div>
+        {% endif %}
+        <div class="form-actions">
+            <span class="form-hint">Los cambios se aplican al guardar.</span>
+            <button class="btn btn-primary" type="submit">
+                <svg class="icon icon-sm"><use href="#i-check-circle"></use></svg>
+                Guardar cambios
+            </button>
+        </div>
+    </form>
+</section>
+
+<section class="card section-gap">
+    <div class="card-head">
+        <h3>Miembros del equipo</h3>
+        <a class="link" href="{% url 'reportes:tablero' proyecto.pk %}">Ir al tablero</a>
+    </div>
+    {% for miembro in miembros %}
+    <div class="member">
+        <div>
+            <div class="member-name">{{ miembro.persona.nombre }}</div>
+            <div class="member-role">
+                {% if miembro.activo %}
+                <span class="status green">Activo</span>
+                {% else %}
+                <span class="status gray">Inactivo</span>
+                {% endif %}
+            </div>
+        </div>
+        <form method="post" class="inline-form" style="display:flex;gap:8px;align-items:center;">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="cambiar_rol">
+            <input type="hidden" name="miembro_id" value="{{ miembro.pk }}">
+            <input type="text" name="rol" value="{{ miembro.rol }}" class="select-input">
+            <button class="btn btn-outline" type="submit">Guardar rol</button>
+        </form>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="miembro_id" value="{{ miembro.pk }}">
+            {% if miembro.activo %}
+            <input type="hidden" name="accion" value="desactivar">
+            <button class="icon-btn" type="submit" title="Desactivar">
+                <svg class="icon"><use href="#i-trash"></use></svg>
+            </button>
+            {% else %}
+            <input type="hidden" name="accion" value="reactivar">
+            <button class="btn btn-outline" type="submit">Reactivar</button>
+            {% endif %}
+        </form>
+    </div>
+    {% empty %}
+    <p class="muted">El proyecto todavía no tiene miembros.</p>
+    {% endfor %}
+</section>
+
+<section class="card section-gap">
+    <div class="card-head"><h3>Agregar miembro</h3></div>
+    <form method="post" class="inline-form">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="agregar">
+        <div class="form-row">
+            <div class="form-field field-persona">
+                <label for="agregar-persona">Persona</label>
+                <input id="agregar-persona" type="text" name="persona_nombre" class="select-input" required>
+            </div>
+            <div class="form-field field-rol">
+                <label for="agregar-rol">Rol</label>
+                <input id="agregar-rol" type="text" name="rol" class="select-input" required>
+            </div>
+            <button class="btn btn-primary" type="submit">
+                <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+                Agregar
+            </button>
+        </div>
+    </form>
+</section>
+
+<section class="card section-gap danger-zone">
+    <div class="card-head">
+        <h3>Eliminar proyecto</h3>
+    </div>
+    <p class="muted">Se eliminarán el proyecto, su equipo y sus seguimientos. Esta acción no se puede deshacer.</p>
+    <form method="post"
+          action="{% url 'reportes:eliminar' proyecto.pk %}"
+          onsubmit="return confirm('¿Eliminar el proyecto {{ proyecto.nombre|escapejs }}? También se borrarán su equipo y sus seguimientos.');">
+        {% csrf_token %}
+        <button class="btn btn-danger" type="submit">
+            <svg class="icon icon-sm"><use href="#i-trash"></use></svg>
+            Eliminar proyecto
+        </button>
+    </form>
+</section>
+
+<div class="form-actions">
+    <a class="btn btn-outline" href="{% url 'reportes:lista' %}">Volver a la lista</a>
+</div>
+
+{% endif %}
+{% endblock %}
