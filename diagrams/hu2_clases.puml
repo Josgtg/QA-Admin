@@ -1,0 +1,93 @@
+@startuml
+allowmixing
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype polyline
+top to bottom direction
+
+actor "Encargado de QA" as Encargado
+
+package "modelos.template" <<Rectangle>> {
+  class SeleccionModeloTemplate {
+    + abrir(proyectoId: int): void
+    + seleccionar(modeloId: int, confirmacion: boolean): void
+    + cancelar(): void
+  }
+}
+
+package "modelos.view" <<Rectangle>> {
+  class AplicarModeloView <<propuesta>> {
+    + get(request: HttpRequest, proyectoId: int): HttpResponse
+    + post(request: HttpRequest, proyectoId: int): HttpResponse
+  }
+}
+
+package "tecnicas.model" <<Rectangle>> {
+  class Proyecto {
+    - id: int
+    - nombre: String
+    + obtenerAplicacionVigente(): AplicacionModelo [0..1]
+    + tieneMediciones(): boolean
+    + aplicarModelo(modelo: ModeloCalidad): AplicacionModelo
+  }
+}
+
+package "modelos.model" <<Rectangle>> {
+  class ModeloCalidad {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - predefinido: boolean
+    + {static} obtenerPredefinidos(): List<ModeloCalidad>
+    + obtenerCaracteristicas(): List<Caracteristica>
+  }
+
+  class Caracteristica {
+    - id: int
+    - nombre: String
+    + obtenerMetricas(): List<Metrica>
+  }
+
+  class Metrica {
+    - id: int
+    - nombre: String
+    - unidad: String
+    - meta: Float [0..1]
+    - tipoUmbral: String
+  }
+
+  class AplicacionModelo <<propuesta>> {
+    - id: int
+    - fechaAplicacion: DateTime
+    - vigente: boolean
+    + AplicacionModelo(proyecto: Proyecto, modelo: ModeloCalidad)
+    + cerrar(): void
+  }
+
+  class MetricaAplicada <<propuesta>> {
+    - id: int
+    - nombre: String
+    - unidad: String
+    - meta: Float [0..1]
+    - tipoUmbral: String
+    + {static} crearDesdeModelo(aplicacion: AplicacionModelo, modelo: ModeloCalidad): List<MetricaAplicada>
+  }
+}
+
+ModeloCalidad "1" *-- "0..*" Caracteristica
+Caracteristica "1" *-- "0..*" Metrica
+Proyecto "1" -- "0..*" AplicacionModelo : historial
+AplicacionModelo "*" --> "1" ModeloCalidad
+AplicacionModelo "1" *-- "0..*" MetricaAplicada
+MetricaAplicada "*" --> "1" Metrica : origen
+
+Encargado ..> SeleccionModeloTemplate : interactúa >
+SeleccionModeloTemplate ..> AplicarModeloView : solicitud >
+AplicarModeloView ..> Proyecto : aplica modelo >
+AplicarModeloView ..> ModeloCalidad : consulta catálogo >
+
+note bottom of MetricaAplicada
+  Copia la meta vigente al aplicar el modelo.
+  Conserva las metas históricas.
+end note
+@enduml
