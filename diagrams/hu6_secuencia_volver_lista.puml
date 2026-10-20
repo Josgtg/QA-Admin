@@ -1,0 +1,56 @@
+@startuml seq_hu06_05_volver
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as QA
+
+box "Template Layer"
+participant "TableroProyectoTemplate" as TableroUI
+participant "ListaProyectosTemplate" as ListaUI
+end box
+
+box "View Layer (reportes.view)"
+participant "TableroProyectoView" as TableroView
+participant "ListaProyectosView" as ListaView
+end box
+
+box "Model Layer (reportes.model)"
+participant "p: Proyecto" as Proyecto
+end box
+
+== CA3 · Volver a la lista ==
+
+QA -> TableroUI: Clic en "Volver a la lista"
+TableroUI -> TableroView: volver_a_lista()
+activate TableroView
+TableroView --> QA: Redirect · ListaProyectosView.get()
+deactivate TableroView
+
+ListaView -> Proyecto: objects.all()
+activate Proyecto
+Proyecto --> ListaView: QuerySet<Proyecto>
+deactivate Proyecto
+
+loop por cada proyecto
+    ListaView -> Proyecto: periodo()
+    activate Proyecto
+    Proyecto --> ListaView: String
+    deactivate Proyecto
+
+    ListaView -> Proyecto: indice_salud()
+    activate Proyecto
+    Proyecto --> ListaView: Float
+    deactivate Proyecto
+end
+
+ListaView -> ListaUI: render(proyectos)
+ListaUI --> QA: lista actualizada
+
+note right of TableroView
+  Volver_a_lista() es un redirect puro:
+  no arrastra estado del tablero anterior.
+  Cada request reconstruye la lista desde
+  cero (CA3).
+end note
+
+@enduml

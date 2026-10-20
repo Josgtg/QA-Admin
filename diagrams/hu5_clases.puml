@@ -1,20 +1,26 @@
-@startuml
+@startuml clases_tecnicas_qa
 skinparam classAttributeIconSize 0
 skinparam shadowing false
-skinparam linetype polyline
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam nodesep 50
+skinparam ranksep 60
 
-package "tecnicas.template" <<Rectangle>> {
+title Clases: catalogo y seguimiento de tecnicas QA (HU-04 y HU-05)
+
+package "tecnicas.template" #E1F5EE {
   class SeleccionTecnicaTemplate {
   }
 }
 
-package "tecnicas.view" <<Rectangle>> {
+package "tecnicas.view" #E1F5EE {
   class SeguirTecnicaView {
-    + seguirTecnica(p: Proyecto, tqa: TecnicaQA)
+    + seguir_tecnica(proyecto: Proyecto, tecnica: TecnicaQA)
+    + remover_tecnica(seguimiento: SeguimientoTecnica)
   }
 }
 
-package "tecnicas.model" <<Rectangle>> {
+package "tecnicas.model" #E1F5EE {
   enum Dimension {
     ESPECIFICACION
     DISENO
@@ -27,78 +33,89 @@ package "tecnicas.model" <<Rectangle>> {
     VALIDACION
   }
 
-  class CatalogoTQA {
-    + obtenerTecnicasBase(): List<TecnicaQA>
-    + filtrarPorDimension(dim: Dimension): List<TecnicaQA>
-  }
-
-  abstract class TecnicaQA {
+  class TecnicaQA {
     - id: int
     - nombre: String
     - descripcion: String
     - objetivo: String
-    - preguntaClave: String
+    - pregunta_clave: String
     - dimension: Dimension
-    - tipoControl: TipoControl
-    + {abstract} obtenerPasos(): List<Paso>
+    - tipo_control: TipoControl
+    + obtener_pasos(): List<Paso>
   }
 
   class Paso {
     - id: int
     - orden: int
     - instruccion: String
-    - evidenciaEsperada: String
-  }
-
-  class Proyecto {
-    - id: int
-    - nombre: String
-    + seguirTecnica(tqa: TecnicaQA): SeguimientoTecnica
-    + removerTecnica(seguimientoId: int): void
+    - evidencia_esperada: String
   }
 
   class SeguimientoTecnica {
     - id: int
-    - tecnicaActiva: TecnicaQA
-    - porcentajeAvance: Float
-    + tieneEvidenciasRegistradas(): boolean
-    + calcularAvance(): Float
+    - activa: boolean
+    + tiene_evidencias_registradas(): boolean
+    + calcular_avance(): Float
+    + desactivar(): void
   }
 
   class SeguimientoPaso {
     - id: int
     - completado: boolean
     - comentario: String
-    - fechaCompletado: Date
-    - autor: String
-    + agregarEvidencia(e: Evidencia): void
-    + marcarCompletado(): void
+    - fecha_completado: Date
+    + agregar_evidencia(e: Evidencia): void
+    + marcar_completado(): void
   }
 
   class Evidencia {
     - id: int
-    - urlArchivo: String
-    - tipo: TipoControl
-    - fechaRegistro: Date
-    - autor: String
+    - enlace: String
+    - archivo: String
+    - fecha_registro: Date
   }
 }
 
-' Relaciones internas de modelos
-CatalogoTQA "1" o-- "*" TecnicaQA
-TecnicaQA "*" --> "1" Dimension
-TecnicaQA "*" --> "1" TipoControl
-TecnicaQA "1" *-- "1..*" Paso
+package "reportes.model" #FAEEDA {
+  class Proyecto {
+    - id: int
+    - nombre: String
+    - fecha_inicio: Date
+    - fecha_fin: Date
+  }
 
-Proyecto "1" *-- "0..*" SeguimientoTecnica
+  class MiembroProyecto {
+    - id: int
+    - rol: String
+    - activo: boolean
+  }
+}
+
+TecnicaQA "1" *-- "1..*" Paso
+TecnicaQA --> Dimension
+TecnicaQA --> TipoControl
+
+SeguimientoTecnica "*" --> "1" Proyecto
 SeguimientoTecnica "*" --> "1" TecnicaQA
 SeguimientoTecnica "1" *-- "1..*" SeguimientoPaso
 SeguimientoPaso "*" --> "1" Paso
 SeguimientoPaso "1" *-- "0..1" Evidencia
+Evidencia "*" --> "1" MiembroProyecto : autor
 
-Evidencia "*" --> "1" TipoControl
+Proyecto "1" *-- "0..*" MiembroProyecto
 
-' Relaciones MVT
 SeleccionTecnicaTemplate ..> SeguirTecnicaView : dispara solicitud >
-SeguirTecnicaView ..> Proyecto : opera sobre >
+SeguirTecnicaView ..> SeguimientoTecnica : crea / desactiva >
+
+note right of SeguimientoTecnica
+  Es la app tecnicas quien conoce a Proyecto,
+  nunca al reves. Quitar una tecnica la
+  desactiva (activa = False) y conserva
+  sus evidencias.
+end note
+
+note bottom of Evidencia
+  Regla: el autor debe ser MiembroProyecto
+  del mismo Proyecto (se valida en clean()).
+end note
 @enduml

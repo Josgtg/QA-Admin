@@ -1,0 +1,167 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam nodesep 55
+skinparam ranksep 70
+skinparam packageStyle rectangle
+skinparam entity {
+  BackgroundColor White
+  BorderColor #444444
+}
+
+title Modelo relacional formal — MVP de calidad (apps: reportes, modelos, tecnicas)
+
+' ─────────────────────────────────────────────────────────────
+' Leyenda:
+'   <<PK>>  Clave primaria
+'   <<FK>>  Clave foránea
+'   <<FK,U>> Clave foránea + restricción UNIQUE (relación 1:1)
+'   UNIQUE(a,b)  Restricción compuesta (ver nota al pie de la entidad)
+' ─────────────────────────────────────────────────────────────
+
+package "reportes" #FAEEDA {
+  entity "Persona" as persona {
+    * id           : BIGINT   <<PK>>
+    --
+    * nombre       : VARCHAR
+  }
+
+  entity "Proyecto" as proyecto {
+    * id           : BIGINT   <<PK>>
+    --
+    * nombre       : VARCHAR
+      fecha_inicio : DATE
+      fecha_fin    : DATE
+  }
+
+  entity "MiembroProyecto" as miembro_proyecto {
+    * id           : BIGINT   <<PK>>
+    --
+    * persona_id   : BIGINT   <<FK>>
+    * proyecto_id  : BIGINT   <<FK>>
+    * rol          : VARCHAR
+    * activo       : BOOLEAN
+  }
+  note right of miembro_proyecto
+    UNIQUE(persona_id, proyecto_id)
+  end note
+}
+
+package "modelos" #EEEDFE {
+  entity "Caracteristica" as caracteristica {
+    * id              : BIGINT   <<PK>>
+    --
+    * nombre          : VARCHAR
+      descripcion     : TEXT
+  }
+
+  entity "Metrica" as metrica {
+    * id              : BIGINT   <<PK>>
+    --
+    * caracteristica_id : BIGINT <<FK>>
+    * nombre          : VARCHAR
+      descripcion     : TEXT
+      valor_min       : NUMERIC
+      valor_max       : NUMERIC
+  }
+
+  entity "ModeloCalidad" as modelo_calidad {
+    * id              : BIGINT   <<PK>>
+    --
+    * nombre          : VARCHAR
+      descripcion     : TEXT
+  }
+
+  entity "ModeloMetrica" as modelo_metrica {
+    * id              : BIGINT   <<PK>>
+    --
+    * modelo_calidad_id : BIGINT <<FK>>
+    * metrica_id      : BIGINT   <<FK>>
+    * umbral          : NUMERIC
+    * activa          : BOOLEAN
+  }
+  note right of modelo_metrica
+    UNIQUE(modelo_calidad_id, metrica_id)
+  end note
+
+  entity "ModeloAplicado" as modelo_aplicado {
+    * id                : BIGINT <<PK>>
+    --
+    * proyecto_id       : BIGINT <<FK,U>>
+    * modelo_calidad_id : BIGINT <<FK>>
+  }
+
+  entity "RevisionMetrica" as revision_metrica {
+    * id                   : BIGINT <<PK>>
+    --
+    * proyecto_id          : BIGINT <<FK>>
+    * metrica_id           : BIGINT <<FK>>
+    * miembro_proyecto_id  : BIGINT <<FK>>
+    * valor                : NUMERIC
+    * fecha                : DATE
+      enlace               : VARCHAR
+      archivo              : VARCHAR
+      cumple               : BOOLEAN
+  }
+}
+
+package "tecnicas" #E1F5EE {
+  entity "TecnicaQA" as tecnica_qa {
+    * id              : BIGINT   <<PK>>
+    --
+    * nombre          : VARCHAR
+      descripcion     : TEXT
+      objetivo        : TEXT
+      pregunta_clave  : TEXT
+      dimension       : VARCHAR
+      tipo_control    : VARCHAR
+  }
+
+  entity "SeguimientoTecnica" as seguimiento_tecnica {
+    * id              : BIGINT   <<PK>>
+    --
+    * proyecto_id     : BIGINT   <<FK>>
+    * tecnica_qa_id   : BIGINT   <<FK>>
+    * activa          : BOOLEAN
+  }
+  note right of seguimiento_tecnica
+    UNIQUE(proyecto_id, tecnica_qa_id)
+  end note
+
+  entity "Evidencia" as evidencia {
+    * id                       : BIGINT <<PK>>
+    --
+    * seguimiento_tecnica_id   : BIGINT <<FK>>
+    * miembro_proyecto_id      : BIGINT <<FK>>
+      enlace                   : VARCHAR
+      archivo                  : VARCHAR
+      fecha_registro           : DATE
+  }
+}
+
+' ─────────────────────────────────────────────────────────────
+' Relaciones (cardinalidades crow's foot, etiqueta = FK)
+' ─────────────────────────────────────────────────────────────
+
+persona              ||--o{ miembro_proyecto   : "persona_id   (1 : 0..N)"
+proyecto             ||--o{ miembro_proyecto   : "proyecto_id  (1 : 0..N)"
+
+caracteristica       ||--o{ metrica            : "caracteristica_id (1 : 0..N)"
+
+modelo_calidad       ||--o{ modelo_metrica     : "modelo_calidad_id (1 : 0..N)"
+metrica              ||--o{ modelo_metrica     : "metrica_id (1 : 0..N)"
+
+proyecto             ||--o| modelo_aplicado    : "proyecto_id  (1 : 0..1)"
+modelo_calidad       ||--o{ modelo_aplicado    : "modelo_calidad_id (1 : 0..N)"
+
+proyecto             ||--o{ revision_metrica   : "proyecto_id (1 : 0..N)"
+metrica              ||--o{ revision_metrica   : "metrica_id (1 : 0..N)"
+miembro_proyecto     ||--o{ revision_metrica   : "miembro_proyecto_id (1 : 0..N)"
+
+proyecto             ||--o{ seguimiento_tecnica : "proyecto_id (1 : 0..N)"
+tecnica_qa           ||--o{ seguimiento_tecnica : "tecnica_qa_id (1 : 0..N)"
+
+seguimiento_tecnica  ||--o{ evidencia          : "seguimiento_tecnica_id (1 : 0..N)"
+miembro_proyecto     ||--o{ evidencia          : "miembro_proyecto_id (1 : 0..N)"
+@enduml

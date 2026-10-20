@@ -1,0 +1,73 @@
+@startuml seq_hu06_02_crear
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as QA
+
+box "Template Layer"
+participant "ProyectoFormTemplate" as FormUI
+end box
+
+box "View Layer (reportes.view)"
+participant "ListaProyectosView" as ListaView
+participant "CrearProyectoView" as CrearView
+end box
+
+box "Model Layer (reportes.model)"
+participant "p: Proyecto" as Proyecto
+participant "mp: MiembroProyecto" as Miembro
+participant "per: Persona" as Persona
+end box
+
+== CA2 · Abrir el formulario de creación ==
+
+QA -> ListaView: Clic en "Crear proyecto"
+activate ListaView
+ListaView -> ListaView: ir_a_crear()
+ListaView --> QA: Redirect · CrearProyectoView.get()
+deactivate ListaView
+
+CrearView -> FormUI: render(form vacío)
+FormUI --> QA: nombre, fechas y filas de equipo
+
+== CA2 · Enviar el formulario ==
+
+QA -> FormUI: Completa proyecto + equipo inicial
+FormUI -> CrearView: post(request, datos)
+activate CrearView
+
+CrearView -> Proyecto: new(nombre, fecha_inicio, fecha_fin)
+activate Proyecto
+Proyecto --> CrearView: p
+deactivate Proyecto
+
+loop por cada miembro del form
+    CrearView -> Proyecto: agregar_miembro(persona, rol)
+    activate Proyecto
+
+    Proyecto -> Miembro: new(p, persona, rol)
+    activate Miembro
+    Miembro -> Miembro: clean()
+    note right of Miembro
+      Valida UNIQUE(persona, proyecto):
+      una Persona no se repite en
+      el mismo Proyecto.
+    end note
+    Miembro --> Proyecto: mp
+    deactivate Miembro
+
+    Proyecto --> CrearView: miembro registrado
+    deactivate Proyecto
+end
+
+CrearView --> QA: Redirect · ListaProyectosView.get()
+deactivate CrearView
+
+note over of CrearView
+  CrearProyectoView comparte ProyectoFormTemplate
+  con EditarProyectoView. La diferencia es que
+  aquí no hay desactivación: todos los miembros
+  se crean activos.
+end note
+
+@enduml
