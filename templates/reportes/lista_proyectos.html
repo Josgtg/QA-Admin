@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+
+{% block title %}Registro de Proyectos · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h2>Registro de Proyectos</h2>
+        <p class="subtitle">Alta, consulta y mantenimiento de proyectos bajo supervisión QA</p>
+    </div>
+    <div class="actions projects-actions">
+        <form class="search" method="get" action="{% url 'reportes:lista' %}">
+            <svg class="icon icon-sm"><use href="#i-search"></use></svg>
+            <input type="search" name="q" value="{{ busqueda }}" placeholder="Buscar proyecto...">
+            <input type="hidden" name="filtro" value="{{ filtro }}">
+            {% if proyecto_seleccionado %}
+            <input type="hidden" name="seleccionado" value="{{ proyecto_seleccionado.pk }}">
+            {% endif %}
+        </form>
+        <a class="btn btn-primary" href="{% url 'reportes:crear' %}">
+            <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+            Nuevo Proyecto
+        </a>
+    </div>
+</div>
+
+{% if messages %}
+<div class="flash-stack">
+    {% for message in messages %}
+    <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if not hay_proyectos %}
+    {% include 'reportes/_estado_vacio.html' %}
+{% else %}
+<div class="tabs">
+    <a class="tab {% if filtro == 'todos' %}active{% endif %}"
+       href="{% url 'reportes:lista' %}?filtro=todos{% if busqueda %}&q={{ busqueda|urlencode }}{% endif %}">
+        Todos ({{ conteos.todos }})
+    </a>
+    <a class="tab {% if filtro == 'activos' %}active{% endif %}"
+       href="{% url 'reportes:lista' %}?filtro=activos{% if busqueda %}&q={{ busqueda|urlencode }}{% endif %}">
+        Activos ({{ conteos.activos }})
+    </a>
+    <a class="tab {% if filtro == 'planificacion' %}active{% endif %}"
+       href="{% url 'reportes:lista' %}?filtro=planificacion{% if busqueda %}&q={{ busqueda|urlencode }}{% endif %}">
+        En planificación ({{ conteos.planificacion }})
+    </a>
+    <a class="tab {% if filtro == 'cerrados' %}active{% endif %}"
+       href="{% url 'reportes:lista' %}?filtro=cerrados{% if busqueda %}&q={{ busqueda|urlencode }}{% endif %}">
+        Cerrados ({{ conteos.cerrados }})
+    </a>
+</div>
+
+<section class="card table-card">
+    <div class="table-wrap">
+        <table class="data projects-table">
+            <thead>
+                <tr>
+                    <th>Proyecto</th>
+                    <th>Estado</th>
+                    <th>Inicio</th>
+                    <th>Cierre Est.</th>
+                    <th>Salud</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for proyecto in proyectos %}
+                <tr class="project-row {% if proyecto_seleccionado.pk == proyecto.pk %}selected-row{% endif %}"
+                    data-href="?seleccionado={{ proyecto.pk }}&filtro={{ filtro }}{% if busqueda %}&q={{ busqueda|urlencode }}{% endif %}#detalle"
+                    tabindex="0" role="link"
+                    aria-label="Ver detalle de {{ proyecto.nombre }}">
+                    <td>
+                        <a class="cell-title project-link"
+                           href="?seleccionado={{ proyecto.pk }}&filtro={{ filtro }}{% if busqueda %}&q={{ busqueda|urlencode }}{% endif %}#detalle">
+                            {{ proyecto.nombre }}
+                        </a>
+                        <div class="cell-sub">Evaluación de calidad</div>
+                    </td>
+                    <td>
+                        {% include 'reportes/_estado_proyecto.html' with periodo=proyecto.periodo_actual %}
+                    </td>
+                    <td>{{ proyecto.fecha_inicio|date:"d/m/Y" }}</td>
+                    <td>{{ proyecto.fecha_fin|date:"d/m/Y" }}</td>
+                    <td>
+                        {% with salud=proyecto.salud_actual %}
+                        {% if salud is None %}
+                        <span class="health-empty">Sin datos</span>
+                        {% else %}
+                        <div class="health-cell">
+                            <div class="bar">
+                                <span class="{% if salud >= 80 %}fill-green{% elif salud >= 60 %}fill-amber{% elif salud >= 40 %}fill-orange{% else %}fill-gray{% endif %}"
+                                      style="width: {{ salud }}%"></span>
+                            </div>
+                            <span class="health-value">{{ salud }}%</span>
+                            {% if salud >= 80 %}
+                            <span class="health-label green">Alto</span>
+                            {% elif salud >= 60 %}
+                            <span class="health-label amber">Medio</span>
+                            {% elif salud >= 40 %}
+                            <span class="health-label orange">Bajo</span>
+                            {% else %}
+                            <span class="health-label gray">Inicial</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+                    </td>
+                    <td class="actions-cell">
+                        <a class="icon-btn" href="{% url 'reportes:tablero' proyecto.pk %}"
+                           title="Abrir tablero" aria-label="Abrir tablero de {{ proyecto.nombre }}">
+                            <svg class="icon"><use href="#i-eye"></use></svg>
+                        </a>
+                        <a class="icon-btn" href="{% url 'reportes:editar' proyecto.pk %}"
+                           title="Editar proyecto" aria-label="Editar proyecto {{ proyecto.nombre }}">
+                            <svg class="icon"><use href="#i-pencil"></use></svg>
+                        </a>
+                        <form class="inline-form" method="post"
+                              action="{% url 'reportes:eliminar' proyecto.pk %}"
+                              onsubmit="return confirm('¿Eliminar el proyecto {{ proyecto.nombre|escapejs }}? También se borrarán su equipo y sus seguimientos.');">
+                            {% csrf_token %}
+                            <button class="icon-btn icon-btn-danger" type="submit"
+                                    title="Eliminar proyecto" aria-label="Eliminar proyecto {{ proyecto.nombre }}">
+                                <svg class="icon"><use href="#i-trash"></use></svg>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="empty-row">
+                        No se encontraron proyectos con ese criterio.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+{% include 'reportes/_previsualizacion_proyecto.html' %}
+
+<script>
+document.querySelectorAll('.project-row').forEach(function (row) {
+    function abrirDetalle() {
+        window.location.href = row.dataset.href;
+    }
+    row.addEventListener('click', function (event) {
+        if (event.target.closest('a, button, form, input, select, textarea')) {
+            return;
+        }
+        abrirDetalle();
+    });
+    row.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            abrirDetalle();
+        }
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

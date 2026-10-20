@@ -1218,6 +1218,59 @@ table.data {
     font-size: 11px;
 }
 
+.form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.form-field label {
+    color: var(--soft);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.form-row {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: flex-start;
+    gap: 12px;
+    flex-wrap: nowrap;
+    width: 100%;
+    padding: 10px 2px;
+    border-bottom: 1px solid #f4f5f7;
+}
+
+.form-row:last-child {
+    border-bottom: 0;
+}
+
+.form-row .form-field {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.form-row .form-field.field-persona {
+    flex-basis: 260px;
+    max-width: 260px;
+}
+
+.form-row .form-field.field-rol {
+    flex-basis: 220px;
+    max-width: 220px;
+}
+
+.form-row .form-field input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.form-row > .btn {
+    flex: 0 0 auto;
+}
+
 .empty-state {
     display: flex;
     flex-direction: column;
@@ -1388,5 +1441,300 @@ table.data {
 
     .select-btn {
         width: 100%;
+    }
+
+    .form-row {
+        flex-wrap: wrap;
+    }
+
+    .form-row .form-field.field-persona,
+    .form-row .form-field.field-rol {
+        flex: 1 1 180px;
+        max-width: none;
+    }
+}
+
+/* Projects list (HU-06) -------------------------------------------------- */
+.projects-actions .search {
+    width: 250px;
+}
+
+.project-link {
+    display: inline-block;
+    transition: color 0.15s ease;
+}
+
+.project-row {
+    cursor: pointer;
+}
+
+.project-row:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+}
+
+.project-link:hover {
+    color: var(--primary);
+}
+
+.icon-btn-danger:hover {
+    color: var(--red);
+}
+
+.btn-danger {
+    border-color: var(--red);
+    background: var(--red);
+    color: #ffffff;
+}
+
+.btn-danger:hover {
+    border-color: #dc2626;
+    background: #dc2626;
+}
+
+.danger-zone {
+    border: 1px solid #f3cccc;
+}
+
+.danger-zone .card-head h3 {
+    color: #b91c1c;
+}
+
+.danger-zone p {
+    margin: 0 0 14px;
+}
+
+.actions-cell form {
+    display: inline;
+}
+
+.health-empty {
+    color: var(--soft);
+    font-size: 11.5px;
+}
+
+.health-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 150px;
+}
+
+.health-cell .bar {
+    width: 74px;
+    height: 5px;
+    flex: none;
+}
+
+.health-value {
+    color: #4b5563;
+    font-size: 11.5px;
+    font-weight: 600;
+    min-width: 38px;
+}
+
+.health-label {
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.health-detail {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.detail-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 4px;
+}
+
+.preview-grid {
+    align-items: stretch;
+}
+
+.preview-grid .card {
+    display: flex;
+    flex-direction: column;
+}
+
+.preview-grid .detail-actions {
+    margin-top: auto;
+    padding-top: 18px;
+}
+
+.team-list .member {
+    padding: 11px 2px;
+}
+
+.team-list .role-tag {
+    font-size: 11.5px;
+}
+
+.team-list .member:nth-child(5n+1) .role-tag {
+    color: var(--primary);
+}
+
+.team-list .member:nth-child(5n+2) .role-tag {
+    color: #9333ea;
+}
+
+.team-list .member:nth-child(5n+3) .role-tag {
+    color: var(--teal);
+}
+
+.team-list .member:nth-child(5n+4) .role-tag {
+    color: var(--orange);
+}
+
+.team-list .member:nth-child(5n+5) .role-tag {
+    color: #db2777;
+}
+
+.team-list-scroll {
+    max-height: calc(60px * 3);
+    overflow-y: auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: #d7dbe2 transparent;
+}
+
+.team-list-scroll .member {
+    height: 60px;
+    min-height: 58px;
+    overflow: hidden;
+}
+
+.team-list-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.team-list-scroll::-webkit-scrollbar-thumb {
+    background: #d7dbe2;
+    border-radius: 99px;
+}
+
+/* Tablero del proyecto -------------------------------------------------- */
+.tablero-updated {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 6px;
+    font-size: 11.5px;
+}
+
+.subtitle .status {
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.dash-left .chart-card {
+    margin-top: 0;
+}
+
+.ring-empty .ring-value {
+    color: var(--soft);
+}
+
+.ring-value-circle.tone-green {
+    stroke: var(--green-bright);
+}
+
+.ring-value-circle.tone-amber {
+    stroke: var(--amber);
+}
+
+.ring-value-circle.tone-orange {
+    stroke: var(--orange);
+}
+
+.ring-value-circle.tone-gray {
+    stroke: #9ca3af;
+}
+
+.dot-amber {
+    background: var(--amber);
+}
+
+.dot-orange {
+    background: var(--orange);
+}
+
+.dot-gray {
+    background: #9ca3af;
+}
+
+.chart-grid {
+    stroke: #eef0f3;
+    stroke-width: 1;
+}
+
+.chart-point {
+    fill: var(--primary);
+}
+
+.chart-labels {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: 8px;
+    color: var(--soft);
+    font-size: 10px;
+}
+
+.chart-note {
+    margin: 10px 0 0;
+    color: var(--soft);
+    font-size: 10.5px;
+}
+
+.placeholder-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 150px;
+    padding: 20px 16px;
+    border: 1px dashed #dfe3e9;
+    border-radius: 7px;
+    background: #fbfcfd;
+    text-align: center;
+}
+
+.placeholder-block .icon {
+    width: 22px;
+    height: 22px;
+    color: var(--soft);
+}
+
+.placeholder-block p {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4b5563;
+}
+
+.placeholder-block span {
+    max-width: 290px;
+    color: var(--soft);
+    font-size: 11px;
+}
+
+.placeholder-block-sm {
+    min-height: 110px;
+}
+
+@media (max-width: 720px) {
+    .projects-actions {
+        width: 100%;
+    }
+
+    .projects-actions .search {
+        width: 100%;
+    }
+
+    .health-cell {
+        min-width: 0;
     }
 }
