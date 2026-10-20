@@ -6,19 +6,27 @@
 <div class="page-head">
     <div>
         <h2>Catálogo de Modelos de Calidad</h2>
-        <p class="subtitle">Modelos predefinidos con sus características, métricas y metas</p>
+        <p class="subtitle">
+            Modelos predefinidos con sus características, métricas y metas.
+        </p>
     </div>
+    <span class="head-muted">
+        {{ modelos|length }} modelo{{ modelos|length|pluralize:"s" }} predefinido{{ modelos|length|pluralize:"s" }}
+    </span>
 </div>
 
 {% for modelo in modelos %}
-<section class="card table-card section-gap">
+<section class="card model-card section-gap">
     <div class="card-head">
         <div>
             <h3>{{ modelo.nombre }}</h3>
-            <p class="muted">{{ modelo.descripcion }}</p>
+            <p class="model-description">{{ modelo.descripcion }}</p>
         </div>
+        <span class="head-muted">
+            {{ modelo.caracteristicas.count }} característica{{ modelo.caracteristicas.count|pluralize:"s" }}
+        </span>
     </div>
-    <div class="table-wrap">
+    <div class="table-wrap model-table-wrap">
         <table class="data">
             <thead>
                 <tr>

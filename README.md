@@ -73,15 +73,11 @@ Rutas disponibles:
 | `/demo/` | Demo de la interfaz visual |
 | `/tecnicas/seguimiento/` | Selección de técnicas QA por proyecto (HU-05) |
 | `/modelos/` | Catálogo de modelos de calidad predefinidos (HU-03) |
+| `/` | Proyectos agrupados y filtrados por periodo (HU-07) |
+| `/crear/` | Registro de un nuevo proyecto (HU-07) |
 
-### 5. Pruebas
-
-```bash
-python manage.py test
-```
-
-Actualmente no existen pruebas implementadas; los archivos `tests.py` de cada app
-están listos para agregarlas.
+La migración `tecnicas.0004_tecnicas_ejemplo` carga un catálogo base con dos
+técnicas de ejemplo: Revisión de código y Revisión de requisitos.
 
 ## Flujo de trabajo con Git
 

@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
 
@@ -86,6 +87,8 @@ class Paso(models.Model):
 
 class Proyecto(models.Model):
     nombre = models.CharField(max_length=200)
+    fecha_inicio = models.DateField()
+    fecha_fin = models.DateField()
 
     class Meta:
         verbose_name = 'proyecto'
@@ -94,6 +97,31 @@ class Proyecto(models.Model):
 
     def __str__(self):
         return self.nombre
+
+    def clean(self):
+        if (
+            self.fecha_inicio
+            and self.fecha_fin
+            and self.fecha_fin < self.fecha_inicio
+        ):
+            raise ValidationError(
+                {
+                    'fecha_fin': (
+                        'La fecha de fin no puede ser anterior a la de inicio.'
+                    )
+                }
+            )
+
+    def periodo(self):
+        """Estado derivado de las fechas, según e-r.puml."""
+        if not self.fecha_inicio or not self.fecha_fin:
+            return 'Sin periodo'
+        hoy = timezone.localdate()
+        if hoy < self.fecha_inicio:
+            return 'Futuro'
+        if hoy > self.fecha_fin:
+            return 'Terminado'
+        return 'Activo'
 
     @transaction.atomic
     def seguir_tecnica(self, tqa):

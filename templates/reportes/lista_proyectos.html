@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+
+{% block title %}Proyectos por periodo · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h2>Proyectos por Periodo</h2>
+        <p class="subtitle">
+            Organiza los proyectos según el periodo derivado de sus fechas.
+        </p>
+    </div>
+    <div class="actions">
+        <a class="btn btn-primary" href="{% url 'reportes:crear' %}">
+            <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+            Nuevo Proyecto
+        </a>
+    </div>
+</div>
+
+{% if messages %}
+<div class="flash-stack">
+    {% for message in messages %}
+    <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if not hay_proyectos and not periodo_seleccionado %}
+<section class="card empty-state">
+    <svg class="icon empty-icon"><use href="#i-projects"></use></svg>
+    <h3>No hay proyectos registrados todavía</h3>
+    <p>Registra un proyecto con sus fechas de inicio y fin para verlo aquí.</p>
+    <div class="actions empty-actions">
+        <a class="btn btn-primary" href="{% url 'reportes:crear' %}">
+            <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+            Crear primer proyecto
+        </a>
+    </div>
+</section>
+{% else %}
+<div class="tabs">
+    <a class="tab {% if not periodo_seleccionado %}active{% endif %}"
+       href="{% url 'reportes:lista' %}">
+        Todos ({{ total_proyectos }})
+    </a>
+    {% for opcion in opciones %}
+    <a class="tab {% if periodo_seleccionado and periodo_seleccionado.id == opcion.periodo.id %}active{% endif %}"
+       href="{% url 'reportes:lista' %}?periodo={{ opcion.periodo.id }}">
+        {{ opcion.periodo.nombre }} ({{ opcion.total }})
+    </a>
+    {% endfor %}
+</div>
+
+{% if periodo_seleccionado %}
+<p class="subtitle">
+    Mostrando solo el periodo <strong>{{ periodo_seleccionado.nombre }}</strong>.
+    <a class="link" href="{% url 'reportes:lista' %}">Ver todos</a>
+</p>
+{% endif %}
+
+{% for grupo in grupos %}
+<section class="card section-gap">
+    <div class="card-head">
+        <div>
+            <h3>{{ grupo.periodo.nombre }}</h3>
+            <p class="muted">{{ grupo.periodo.descripcion }}</p>
+        </div>
+        <span class="head-muted">
+            {{ grupo.total }} proyecto{{ grupo.total|pluralize:"s" }}
+        </span>
+    </div>
+
+    {% if grupo.proyectos %}
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Proyecto</th>
+                    <th>Inicio</th>
+                    <th>Fin</th>
+                    <th>Periodo</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for proyecto in grupo.proyectos %}
+                <tr>
+                    <td><div class="cell-title">{{ proyecto.nombre }}</div></td>
+                    <td>{{ proyecto.fecha_inicio|date:"d/m/Y" }}</td>
+                    <td>{{ proyecto.fecha_fin|date:"d/m/Y" }}</td>
+                    <td>
+                        <span class="status {% if grupo.periodo.nombre == 'Activo' %}green{% elif grupo.periodo.nombre == 'Futuro' %}amber{% else %}gray{% endif %}">
+                            {{ grupo.periodo.nombre }}
+                        </span>
+                    </td>
+                    <td class="actions-cell">
+                        <a class="icon-btn"
+                           href="{% url 'tecnicas:seguimiento' %}?proyecto={{ proyecto.pk }}"
+                           title="Seleccionar técnicas QA"
+                           aria-label="Seleccionar técnicas QA de {{ proyecto.nombre }}">
+                            <svg class="icon"><use href="#i-techniques"></use></svg>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-row">No hay proyectos en este periodo.</div>
+    {% endif %}
+</section>
+{% endfor %}
+{% endif %}
+{% endblock %}

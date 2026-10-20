@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+
+{% block title %}Nuevo proyecto · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <a class="back-link" href="{% url 'reportes:lista' %}">
+            <svg class="icon icon-xs"><use href="#i-arrow-left"></use></svg>
+            Volver a proyectos
+        </a>
+        <h2>Nuevo Proyecto</h2>
+        <p class="subtitle">
+            Registra la información básica. El periodo se calcula automáticamente
+            a partir de las fechas de inicio y fin.
+        </p>
+    </div>
+</div>
+
+<div class="project-form-layout">
+    <section class="card project-form-card">
+        <div class="form-card-head">
+            <span class="form-card-icon">
+                <svg class="icon"><use href="#i-clipboard"></use></svg>
+            </span>
+            <div>
+                <h3>Datos del proyecto</h3>
+                <p>El nombre y las fechas serán visibles en el listado de proyectos.</p>
+            </div>
+        </div>
+
+        <form method="post" novalidate>
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="flash flash-error">
+                {{ form.non_field_errors|striptags }}
+            </div>
+            {% endif %}
+
+            <div class="form-grid">
+                <div class="field field-wide">
+                    <label for="{{ form.nombre.id_for_label }}">
+                        {{ form.nombre.label }} <span class="field-required">*</span>
+                    </label>
+                    {{ form.nombre }}
+                    <p class="field-hint">
+                        Usa un nombre que permita identificar el proyecto en el seguimiento.
+                    </p>
+                    {% if form.nombre.errors %}
+                    <div class="field-error">{{ form.nombre.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field">
+                    <label for="{{ form.fecha_inicio.id_for_label }}">
+                        {{ form.fecha_inicio.label }} <span class="field-required">*</span>
+                    </label>
+                    {{ form.fecha_inicio }}
+                    {% if form.fecha_inicio.errors %}
+                    <div class="field-error">{{ form.fecha_inicio.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field">
+                    <label for="{{ form.fecha_fin.id_for_label }}">
+                        {{ form.fecha_fin.label }} <span class="field-required">*</span>
+                    </label>
+                    {{ form.fecha_fin }}
+                    {% if form.fecha_fin.errors %}
+                    <div class="field-error">{{ form.fecha_fin.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <a class="btn" href="{% url 'reportes:lista' %}">Cancelar</a>
+                <button class="btn btn-primary" type="submit">
+                    <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+                    Crear proyecto
+                </button>
+            </div>
+        </form>
+    </section>
+
+    <aside class="project-form-aside">
+        <section class="card period-preview">
+            <div class="card-head">
+                <h3>Periodo del proyecto</h3>
+                <svg class="icon icon-sm"><use href="#i-clock"></use></svg>
+            </div>
+            <div class="period-preview-value gray" id="periodo-preview-estado">
+                Sin fechas
+            </div>
+            <p class="period-preview-range" id="periodo-preview-rango">
+                Selecciona las fechas para calcular el periodo.
+            </p>
+            <div class="period-legend">
+                <span class="period-legend-item">
+                    <span class="legend-dot green"></span>
+                    Activo: el proyecto está en curso.
+                </span>
+                <span class="period-legend-item">
+                    <span class="legend-dot amber"></span>
+                    Futuro: todavía no inicia.
+                </span>
+                <span class="period-legend-item">
+                    <span class="legend-dot gray"></span>
+                    Terminado: ya finalizó.
+                </span>
+            </div>
+        </section>
+
+        <section class="card next-steps">
+            <div class="card-head">
+                <h3>Siguientes pasos</h3>
+            </div>
+            <ol class="steps-list">
+                <li><strong>Crea el proyecto</strong> con su nombre y fechas.</li>
+                <li><strong>Elige sus técnicas QA</strong> desde el listado de proyectos.</li>
+                <li><strong>Consulta el periodo</strong> en el que quedó agrupado.</li>
+            </ol>
+        </section>
+    </aside>
+</div>
+
+<script>
+(function () {
+    const inicio = document.getElementById('id_fecha_inicio');
+    const fin = document.getElementById('id_fecha_fin');
+    const estado = document.getElementById('periodo-preview-estado');
+    const rango = document.getElementById('periodo-preview-rango');
+
+    if (!inicio || !fin || !estado || !rango) {
+        return;
+    }
+
+    function leerFecha(valor) {
+        const partes = valor.split('-').map(Number);
+        if (partes.length !== 3 || partes.some(isNaN)) {
+            return null;
+        }
+        return new Date(partes[0], partes[1] - 1, partes[2]);
+    }
+
+    function formatear(fecha) {
+        return fecha.toLocaleDateString('es-MX', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+        });
+    }
+
+    function pintarPeriodo() {
+        const desde = leerFecha(inicio.value);
+        const hasta = leerFecha(fin.value);
+
+        if (!desde || !hasta) {
+            estado.textContent = 'Sin fechas';
+            estado.className = 'period-preview-value gray';
+            rango.textContent = 'Selecciona las fechas para calcular el periodo.';
+            return;
+        }
+
+        if (hasta < desde) {
+            estado.textContent = 'Revisa las fechas';
+            estado.className = 'period-preview-value red';
+            rango.textContent = 'La fecha de fin debe ser igual o posterior al inicio.';
+            return;
+        }
+
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+
+        let nombre = 'Activo';
+        let tono = 'green';
+        if (hoy < desde) {
+            nombre = 'Futuro';
+            tono = 'amber';
+        } else if (hoy > hasta) {
+            nombre = 'Terminado';
+            tono = 'gray';
+        }
+
+        estado.textContent = nombre;
+        estado.className = 'period-preview-value ' + tono;
+        rango.textContent = formatear(desde) + ' — ' + formatear(hasta);
+    }
+
+    inicio.addEventListener('input', function () {
+        fin.min = inicio.value;
+        pintarPeriodo();
+    });
+    fin.addEventListener('input', pintarPeriodo);
+
+    if (inicio.value) {
+        fin.min = inicio.value;
+    }
+    pintarPeriodo();
+})();
+</script>
+{% endblock %}

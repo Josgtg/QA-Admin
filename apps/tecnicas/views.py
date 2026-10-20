@@ -92,7 +92,10 @@ class SeguirTecnicaView(View):
         return self.seguir_tecnica(request)
 
     def seguir_tecnica(self, request: HttpRequest) -> HttpResponse:
-        proyecto_id = request.POST.get('proyecto')
+        proyecto_id = (
+            request.POST.get('proyecto_id')
+            or request.POST.get('proyecto')
+        )
         if not proyecto_id:
             return HttpResponseBadRequest('Debe indicar el proyecto.')
 

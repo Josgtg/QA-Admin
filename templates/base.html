@@ -123,26 +123,31 @@
             <path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/>
             <path d="M9 7V4h6v3"/>
         </symbol>
+        <symbol id="i-calendar" viewBox="0 0 24 24">
+            <rect x="3" y="5" width="18" height="16" rx="2"/>
+            <path d="M8 3v4M16 3v4M3 10h18"/>
+            <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
+        </symbol>
+        <symbol id="i-arrow-left" viewBox="0 0 24 24">
+            <path d="M19 12H5"/>
+            <path d="M11 18l-6-6 6-6"/>
+        </symbol>
     </svg>
 
     <div class="layout">
         <aside class="sidebar">
             <nav class="sidebar-nav">
-                <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">
-                    <svg class="icon"><use href="#i-dashboard"></use></svg>
-                    <span>Dashboard Principal</span>
-                </a>
-                <a class="nav-link {% if request.path == '/proyectos/' %}active{% endif %}" href="/proyectos/">
+                <a class="nav-link {% if request.resolver_match.namespace == 'reportes' %}active{% endif %}" href="{% url 'reportes:lista' %}">
                     <svg class="icon"><use href="#i-projects"></use></svg>
                     <span>Registro de Proyectos</span>
                 </a>
-                <a class="nav-link {% if request.path == '/metricas/' %}active{% endif %}" href="/metricas/">
-                    <svg class="icon"><use href="#i-metrics"></use></svg>
-                    <span>Seguimiento de Métricas</span>
-                </a>
-                <a class="nav-link {% if request.path == '/tecnicas/' %}active{% endif %}" href="/tecnicas/">
+                <a class="nav-link {% if request.resolver_match.namespace == 'tecnicas' %}active{% endif %}" href="{% url 'tecnicas:seguimiento' %}">
                     <svg class="icon"><use href="#i-techniques"></use></svg>
                     <span>Gestión de Técnicas QA</span>
+                </a>
+                <a class="nav-link {% if request.resolver_match.namespace == 'modelos' %}active{% endif %}" href="{% url 'modelos:catalogo' %}">
+                    <svg class="icon"><use href="#i-layers"></use></svg>
+                    <span>Catálogo de Modelos</span>
                 </a>
             </nav>
         </aside>

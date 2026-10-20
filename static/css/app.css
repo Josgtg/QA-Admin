@@ -689,6 +689,32 @@ input {
     overflow-x: auto;
 }
 
+.model-card .card-head {
+    align-items: flex-start;
+}
+
+.model-card .card-head h3 {
+    font-size: 15px;
+}
+
+.model-description {
+    max-width: 760px;
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
+.model-table-wrap {
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    overflow-x: auto;
+}
+
+.model-card .data thead th {
+    background: #f7f8fa;
+}
+
 table.data {
     width: 100%;
     border-collapse: collapse;
@@ -1218,6 +1244,219 @@ table.data {
     font-size: 11px;
 }
 
+.project-form-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.8fr);
+    gap: 16px;
+    align-items: start;
+    max-width: 1000px;
+}
+
+.project-form-card {
+    max-width: none;
+}
+
+.project-form-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 7px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    transition: color 0.15s ease;
+}
+
+.back-link:hover {
+    color: var(--primary);
+}
+
+.form-card-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 18px;
+}
+
+.form-card-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex: none;
+    border-radius: 8px;
+    background: #e8f0fe;
+    color: var(--primary);
+}
+
+.form-card-icon .icon {
+    width: 18px;
+    height: 18px;
+}
+
+.form-card-head h3 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.form-card-head p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.field-hint {
+    margin: 0;
+    color: var(--soft);
+    font-size: 10.5px;
+    line-height: 1.4;
+}
+
+.field-required {
+    color: var(--red);
+}
+
+.period-preview .card-head .icon {
+    color: var(--soft);
+}
+
+.period-preview-value {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 1;
+}
+
+.period-preview-value.green {
+    color: var(--green);
+}
+
+.period-preview-value.amber {
+    color: #d99a00;
+}
+
+.period-preview-value.gray {
+    color: #9ca3af;
+}
+
+.period-preview-value.red {
+    color: var(--red);
+}
+
+.period-preview-range {
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+
+.period-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.period-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 10.5px;
+    line-height: 1.4;
+}
+
+.legend-dot {
+    width: 8px;
+    height: 8px;
+    flex: none;
+    border-radius: 50%;
+}
+
+.legend-dot.green {
+    background: var(--green-bright);
+}
+
+.legend-dot.amber {
+    background: var(--amber);
+}
+
+.legend-dot.gray {
+    background: #9ca3af;
+}
+
+.steps-list {
+    margin: 0;
+    padding-left: 18px;
+    color: #4b5563;
+    font-size: 11.5px;
+    line-height: 1.6;
+}
+
+.steps-list li + li {
+    margin-top: 6px;
+}
+
+.steps-list strong {
+    color: #1f2937;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.field-wide {
+    grid-column: 1 / -1;
+}
+
+.field label {
+    color: #374151;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.field .select-input {
+    width: 100%;
+    min-width: 0;
+}
+
+.field-error {
+    color: var(--red);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.empty-actions {
+    justify-content: center;
+    margin-top: 18px;
+}
+
+.empty-state .actions {
+    justify-content: center;
+    margin-top: 18px;
+}
+
 .empty-state {
     display: flex;
     flex-direction: column;
@@ -1310,6 +1549,10 @@ table.data {
         width: auto;
         flex: 1;
     }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 1100px) {
@@ -1322,6 +1565,10 @@ table.data {
     }
 
     .detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .project-form-layout {
         grid-template-columns: 1fr;
     }
 }

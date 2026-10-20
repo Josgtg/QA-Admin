@@ -11,21 +11,24 @@
             {% if proyecto %} · {{ proyecto.nombre }}{% endif %}
         </p>
     </div>
-    {% if proyectos %}
-    <form method="get" action="{% url 'tecnicas:seguimiento' %}" class="inline-form">
-        {% if catalogo %}
-        <input type="hidden" name="catalogo" value="{{ catalogo.pk }}">
+    <div class="actions">
+        {% if proyectos %}
+        <form method="get" action="{% url 'tecnicas:seguimiento' %}" class="inline-form">
+            {% if catalogo %}
+            <input type="hidden" name="catalogo" value="{{ catalogo.pk }}">
+            {% endif %}
+            <label class="sr-only" for="proyecto-select">Proyecto</label>
+            <select id="proyecto-select" name="proyecto" class="select-input" onchange="this.form.submit()">
+                {% for item in proyectos %}
+                <option value="{{ item.pk }}" {% if proyecto and item.pk == proyecto.pk %}selected{% endif %}>
+                    {{ item.nombre }} · {{ item.periodo }}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
         {% endif %}
-        <label class="sr-only" for="proyecto-select">Proyecto</label>
-        <select id="proyecto-select" name="proyecto" class="select-input" onchange="this.form.submit()">
-            {% for item in proyectos %}
-            <option value="{{ item.pk }}" {% if proyecto and item.pk == proyecto.pk %}selected{% endif %}>
-                {{ item.nombre }}
-            </option>
-            {% endfor %}
-        </select>
-    </form>
-    {% endif %}
+        <a class="btn" href="{% url 'reportes:lista' %}">Ver proyectos</a>
+    </div>
 </div>
 
 {% if messages %}
@@ -41,6 +44,12 @@
     <svg class="icon empty-icon"><use href="#i-techniques"></use></svg>
     <h3>No hay un proyecto seleccionado</h3>
     <p>Registra un proyecto y vuelve a esta pantalla para seleccionar sus técnicas de QA.</p>
+    <div class="actions empty-actions">
+        <a class="btn btn-primary" href="{% url 'reportes:crear' %}">
+            <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+            Crear proyecto
+        </a>
+    </div>
 </section>
 {% else %}
 <form method="post" id="seleccion-form">
