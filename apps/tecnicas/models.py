@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
 
@@ -86,6 +87,8 @@ class Paso(models.Model):
 
 class Proyecto(models.Model):
     nombre = models.CharField(max_length=200)
+    fecha_inicio = models.DateField()
+    fecha_fin = models.DateField()
 
     class Meta:
         verbose_name = 'proyecto'
@@ -94,6 +97,61 @@ class Proyecto(models.Model):
 
     def __str__(self):
         return self.nombre
+
+    def clean(self):
+        if (
+            self.fecha_inicio
+            and self.fecha_fin
+            and self.fecha_fin < self.fecha_inicio
+        ):
+            raise ValidationError(
+                {'fecha_fin': 'La fecha de fin no puede ser anterior a la de inicio.'}
+            )
+
+    def periodo(self):
+        """Estado derivado de las fechas, según e-r.puml."""
+        if not self.fecha_inicio or not self.fecha_fin:
+            return 'Sin periodo'
+        hoy = timezone.localdate()
+        if hoy < self.fecha_inicio:
+            return 'Futuro'
+        if hoy > self.fecha_fin:
+            return 'Terminado'
+        return 'Activo'
+
+    def indice_salud(self):
+        """Promedio provisional del avance de las técnicas activas (0-100)."""
+        avances = list(
+            self.seguimientos.filter(activa=True).values_list(
+                'porcentaje_avance', flat=True
+            )
+        )
+        if not avances:
+            return None
+        return round(sum(avances) / len(avances), 1)
+
+    def equipo_activo(self):
+        return self.equipo.filter(activo=True).select_related('persona')
+
+    def miembros_todos(self):
+        return self.equipo.select_related('persona').order_by(
+            '-activo', 'persona__nombre'
+        )
+
+    def agregar_miembro(self, persona, rol):
+        miembro, creado = self.equipo.get_or_create(
+            persona=persona,
+            defaults={'rol': rol},
+        )
+        if not creado:
+            miembro.rol = rol
+            miembro.activo = True
+            miembro.full_clean()
+            miembro.save(update_fields=['rol', 'activo'])
+        return miembro
+
+    def seguimientos_activos(self):
+        return self.seguimientos.filter(activa=True).select_related('tecnica')
 
     @transaction.atomic
     def seguir_tecnica(self, tqa):
