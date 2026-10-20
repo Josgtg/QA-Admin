@@ -11,6 +11,10 @@ from .models import (
     SeguimientoTecnica,
     TecnicaQA,
 )
+from .selection import (
+    obtener_proyecto_seleccionado,
+    seleccionar_proyecto,
+)
 
 DIMENSION_META = {
     Dimension.ESPECIFICACION.value: {'color': 'blue', 'icon': 'i-file'},
@@ -45,7 +49,8 @@ class SeguirTecnicaView(View):
         if proyecto_id:
             proyecto = get_object_or_404(Proyecto, pk=proyecto_id)
         else:
-            proyecto = proyectos.first()
+            proyecto = obtener_proyecto_seleccionado(request)
+        seleccionar_proyecto(request, proyecto)
 
         grupos, seguimientos = self._agrupar_por_dimension(
             proyecto,
@@ -100,6 +105,7 @@ class SeguirTecnicaView(View):
             return HttpResponseBadRequest('Debe indicar el proyecto.')
 
         proyecto = get_object_or_404(Proyecto, pk=proyecto_id)
+        seleccionar_proyecto(request, proyecto)
 
         quitar_id = request.POST.get('quitar')
         if quitar_id:

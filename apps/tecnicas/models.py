@@ -123,6 +123,40 @@ class Proyecto(models.Model):
             return 'Terminado'
         return 'Activo'
 
+    def indice_salud(self):
+        """Promedio provisional del avance de las técnicas activas (0-100)."""
+        avances = list(
+            self.seguimientos.filter(activa=True).values_list(
+                'porcentaje_avance', flat=True
+            )
+        )
+        if not avances:
+            return None
+        return round(sum(avances) / len(avances), 1)
+
+    def equipo_activo(self):
+        return self.equipo.filter(activo=True).select_related('persona')
+
+    def miembros_todos(self):
+        return self.equipo.select_related('persona').order_by(
+            '-activo', 'persona__nombre'
+        )
+
+    def agregar_miembro(self, persona, rol):
+        miembro, creado = self.equipo.get_or_create(
+            persona=persona,
+            defaults={'rol': rol},
+        )
+        if not creado:
+            miembro.rol = rol
+            miembro.activo = True
+            miembro.full_clean()
+            miembro.save(update_fields=['rol', 'activo'])
+        return miembro
+
+    def seguimientos_activos(self):
+        return self.seguimientos.filter(activa=True).select_related('tecnica')
+
     @transaction.atomic
     def seguir_tecnica(self, tqa):
         seguimiento, _ = SeguimientoTecnica.objects.get_or_create(

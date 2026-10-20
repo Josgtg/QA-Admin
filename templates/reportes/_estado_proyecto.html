@@ -1,0 +1,9 @@
+{% if periodo == 'Activo' %}
+<span class="status green">Activo</span>
+{% elif periodo == 'Futuro' %}
+<span class="status blue">Planificación</span>
+{% elif periodo == 'Terminado' %}
+<span class="status gray">Cerrado</span>
+{% else %}
+<span class="status gray">Sin periodo</span>
+{% endif %}

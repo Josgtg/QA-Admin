@@ -17,12 +17,14 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from apps.reportes.views import InicioView
 from qa_admin.views import demo
 
 urlpatterns = [
+    path('', InicioView.as_view(), name='inicio'),
     path('admin/', admin.site.urls),
     path('demo/', demo, name='demo'),
     path('tecnicas/', include('apps.tecnicas.urls')),
     path('modelos/', include('apps.modelos.urls')),
-    path('', include('apps.reportes.urls')),
+    path('proyectos/', include('apps.reportes.urls')),
 ]

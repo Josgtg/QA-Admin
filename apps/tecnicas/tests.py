@@ -10,6 +10,7 @@ from .models import (
     SeguimientoTecnica,
     TecnicaQA,
 )
+from .selection import SESSION_KEY
 
 
 class TecnicasEjemploTests(TestCase):
@@ -94,3 +95,38 @@ class SeguirTecnicaViewTests(TestCase):
         )
 
         self.assertEqual(respuesta.status_code, 400)
+
+    def test_get_sin_parametro_usa_el_proyecto_de_la_sesion(self):
+        hoy = timezone.localdate()
+        otro = Proyecto.objects.create(
+            nombre='Otro proyecto',
+            fecha_inicio=hoy - timedelta(days=5),
+            fecha_fin=hoy + timedelta(days=5),
+        )
+        sesion = self.client.session
+        sesion[SESSION_KEY] = otro.pk
+        sesion.save()
+
+        respuesta = self.client.get(self.url)
+
+        self.assertEqual(respuesta.context['proyecto'], otro)
+
+    def test_get_con_parametro_guarda_el_proyecto_en_la_sesion(self):
+        self.client.get(self.url, {'proyecto': self.proyecto.pk})
+
+        self.assertEqual(
+            self.client.session[SESSION_KEY], self.proyecto.pk
+        )
+
+    def test_post_guarda_el_proyecto_en_la_sesion(self):
+        self.client.post(
+            self.url,
+            {
+                'proyecto_id': self.proyecto.pk,
+                'tecnicas': [self.tecnica.pk],
+            },
+        )
+
+        self.assertEqual(
+            self.client.session[SESSION_KEY], self.proyecto.pk
+        )

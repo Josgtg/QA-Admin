@@ -1,0 +1,79 @@
+{% if proyecto_seleccionado %}
+{% with proyecto=proyecto_seleccionado equipo=proyecto_seleccionado.equipo_activo salud=proyecto_seleccionado.salud_actual %}
+<div class="detail-grid preview-grid" id="detalle">
+    <section class="card">
+        <div class="card-head">
+            <h3>Detalle del Proyecto</h3>
+            {% include 'reportes/_estado_proyecto.html' with periodo=proyecto.periodo_actual %}
+        </div>
+
+        <dl class="detail-list">
+            <dt>Nombre</dt>
+            <dd>{{ proyecto.nombre }}</dd>
+            <dt>Fecha de Inicio</dt>
+            <dd>{{ proyecto.fecha_inicio|date:"d/m/Y" }}</dd>
+            <dt>Cierre Estimado</dt>
+            <dd>{{ proyecto.fecha_fin|date:"d/m/Y" }}</dd>
+            <dt>Salud</dt>
+            <dd>
+                {% if salud is None %}
+                <span class="health-empty">Sin datos</span>
+                {% else %}
+                <span class="health-detail {% if salud >= 80 %}green{% elif salud >= 60 %}amber{% elif salud >= 40 %}orange{% else %}gray{% endif %}">
+                    {{ salud }}%
+                    {% if salud >= 80 %}Alto{% elif salud >= 60 %}Medio{% elif salud >= 40 %}Bajo{% else %}Inicial{% endif %}
+                </span>
+                {% endif %}
+            </dd>
+        </dl>
+
+        <div class="detail-actions">
+            <a class="btn btn-primary" href="{% url 'reportes:tablero' proyecto.pk %}">
+                <svg class="icon icon-sm"><use href="#i-eye"></use></svg>
+                Tablero
+            </a>
+            <a class="btn btn-outline" href="{% url 'reportes:editar' proyecto.pk %}">
+                <svg class="icon icon-sm"><use href="#i-pencil"></use></svg>
+                Editar
+            </a>
+            <a class="btn btn-outline" href="{% url 'tecnicas:seguimiento' %}">
+                <svg class="icon icon-sm"><use href="#i-techniques"></use></svg>
+                Técnicas
+            </a>
+            <a class="btn btn-outline" href="{% url 'reportes:metricas' proyecto.pk %}">
+                <svg class="icon icon-sm"><use href="#i-metrics"></use></svg>
+                Métricas
+            </a>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="card-head">
+            <h3>Composición del Equipo</h3>
+            <span class="head-muted">{{ equipo|length }} miembro{{ equipo|length|pluralize:"s" }}</span>
+        </div>
+        <div class="team-list team-list-scroll">
+            {% for miembro in equipo %}
+            <div class="member">
+                <div>
+                    <div class="member-name">{{ miembro.persona.nombre }}</div>
+                    <div class="member-role">Miembro activo</div>
+                </div>
+                <span class="role-tag">{{ miembro.rol }}</span>
+            </div>
+            {% empty %}
+            <p class="muted">Equipo sin configurar.</p>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+{% endwith %}
+{% else %}
+<section class="card">
+    <div class="empty-state">
+        <svg class="icon empty-icon"><use href="#i-projects"></use></svg>
+        <h3>Selecciona un proyecto</h3>
+        <p>Elige un proyecto de la lista para ver su detalle y su equipo.</p>
+    </div>
+</section>
+{% endif %}

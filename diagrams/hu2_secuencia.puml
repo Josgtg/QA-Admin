@@ -1,0 +1,81 @@
+@startuml
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer"
+participant "SeleccionModeloTemplate" as UI
+end box
+
+box "View Layer (modelos.view)"
+participant "AplicarModeloView" as View
+end box
+
+box "Model Layer"
+participant "ModeloCalidad" as Modelo
+participant "p: Proyecto" as Proyecto
+participant "anterior: AplicacionModelo" as Anterior
+participant "MetricaAplicada" as Instantanea
+end box
+
+== Seleccionar y aplicar modelo de calidad (HU-02) ==
+
+Encargado -> UI: abrir(proyectoId)
+UI -> View: get(request, proyectoId)
+activate View
+View -> Modelo: obtenerPredefinidos()
+Modelo --> View: modelos: List<ModeloCalidad> (con características y métricas)
+View --> UI: HttpResponse (200, modelos)
+deactivate View
+UI --> Encargado: Muestra modelos, descripciones y características
+
+Encargado -> UI: seleccionar(modeloId, confirmacion)
+note right of UI
+  request.POST contiene modeloId y confirmacion.
+  modelo es el ModeloCalidad predefinido seleccionado.
+end note
+UI -> View: post(request, proyectoId)
+activate View
+View -> Proyecto: obtenerAplicacionVigente()
+Proyecto --> View: anterior: AplicacionModelo o null
+View -> Proyecto: tieneMediciones()
+Proyecto --> View: hayMediciones: boolean
+
+alt Mismo modelo ya vigente
+    View --> UI: HttpResponse (200, anterior; sin cambios)
+    UI --> Encargado: Modelo, características y métricas
+else Modelo diferente vigente, con mediciones y sin confirmación
+    View --> UI: HttpResponse (200, requiereConfirmacion=true)
+    UI --> Encargado: Confirma o cancela
+    note right of UI
+      Confirmar inicia otro POST con confirmacion=true.
+      Esta petición termina sin guardar cambios.
+    end note
+else Primera aplicación, cambio sin mediciones o cambio confirmado
+    View -> Proyecto: aplicarModelo(modelo)
+    activate Proyecto
+    opt Existe aplicación anterior
+        Proyecto -> Anterior: cerrar()
+        Anterior --> Proyecto: void (anterior conservada, vigente=false)
+    end
+    create participant "nueva: AplicacionModelo" as Nueva
+    Proyecto -> Nueva: AplicacionModelo(proyecto, modelo)
+    activate Nueva
+    Nueva -> Instantanea: crearDesdeModelo(nueva, modelo)
+    Instantanea --> Nueva: metricas: List<MetricaAplicada>
+    Nueva --> Proyecto: nueva: AplicacionModelo (vigente=true)
+    deactivate Nueva
+    Proyecto --> View: nueva: AplicacionModelo
+    deactivate Proyecto
+    View --> UI: HttpResponse (302, URL del detalle del proyecto)
+    UI --> Encargado: Muestra modelo, características y métricas
+end
+
+deactivate View
+
+opt Se solicitó confirmación y el encargado cancela
+    Encargado -> UI: cancelar()
+    UI --> Encargado: Conserva el modelo actual, sin guardar cambios
+end
+@enduml

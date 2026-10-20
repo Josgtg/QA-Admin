@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ proyecto.nombre }} · Tablero · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h2>{{ proyecto.nombre }}</h2>
+        <p class="subtitle">
+            Inicio {{ proyecto.fecha_inicio|date:"d/m/Y" }} · Cierre {{ proyecto.fecha_fin|date:"d/m/Y" }}
+            {% include 'reportes/_estado_proyecto.html' with periodo=proyecto.periodo %}
+        </p>
+        <p class="subtitle tablero-updated">
+            <svg class="icon icon-xs"><use href="#i-clock"></use></svg>
+            Última actualización:
+            {% if ultima_actualizacion %}
+            {{ ultima_actualizacion|date:"d/m/Y, H:i" }}
+            {% else %}
+            sin registros de salud todavía
+            {% endif %}
+        </p>
+    </div>
+    <div class="actions">
+        {% if proyectos %}
+        <form method="get" action="{% url 'inicio' %}" class="inline-form">
+            <label class="sr-only" for="proyecto-select">Proyecto</label>
+            <select id="proyecto-select" name="proyecto" class="select-input" onchange="this.form.submit()">
+                {% for item in proyectos %}
+                <option value="{{ item.pk }}" {% if item.pk == proyecto.pk %}selected{% endif %}>
+                    {{ item.nombre }} · {{ item.periodo }}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+        {% endif %}
+        <a class="btn btn-outline" href="{% url 'reportes:lista' %}">
+            <svg class="icon icon-sm"><use href="#i-projects"></use></svg>
+            Volver a la lista
+        </a>
+        <a class="btn btn-primary" href="{% url 'reportes:editar' proyecto.pk %}">
+            <svg class="icon icon-sm"><use href="#i-pencil"></use></svg>
+            Editar proyecto
+        </a>
+    </div>
+</div>
+
+<div class="dash-grid">
+    <div class="dash-left">
+        <section class="card health-card">
+            <p class="card-title-center">Índice de Salud del Proyecto</p>
+            {% if salud is None %}
+            <div class="ring ring-empty">
+                <svg viewBox="0 0 160 160" role="img" aria-label="Sin datos de salud">
+                    <circle class="ring-track" cx="80" cy="80" r="68"></circle>
+                </svg>
+                <div class="ring-inner">
+                    <span class="ring-value">—</span>
+                    <span class="ring-max">/100</span>
+                </div>
+            </div>
+            <div class="risk">
+                <span class="dot dot-gray"></span>
+                Sin datos
+            </div>
+            <div class="card-footer">
+                <svg class="icon icon-xs"><use href="#i-alert-circle"></use></svg>
+                Aún no hay mediciones de salud
+            </div>
+            {% else %}
+            <div class="ring">
+                <svg viewBox="0 0 160 160" role="img" aria-label="Índice de salud {{ salud }} de 100">
+                    <circle class="ring-track" cx="80" cy="80" r="68"></circle>
+                    <circle class="ring-value-circle tone-{{ tono_salud }}"
+                            cx="80" cy="80" r="68"
+                            stroke-dasharray="427.3"
+                            stroke-dashoffset="{{ desplazamiento_anillo }}"></circle>
+                </svg>
+                <div class="ring-inner">
+                    <span class="ring-value">{{ salud|floatformat:"0" }}</span>
+                    <span class="ring-max">/100</span>
+                </div>
+            </div>
+            <div class="risk">
+                <span class="dot dot-{{ tono_salud }}"></span>
+                Riesgo {{ riesgo_salud }}
+            </div>
+            <div class="card-footer">
+                <svg class="icon icon-xs"><use href="#i-clock"></use></svg>
+                Última evaluación: {{ ultima_actualizacion|date:"d/m/Y, H:i" }}
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="card chart-card">
+            <div class="card-head">
+                <h3>Tendencia de Salud (Últimos 6 registros)</h3>
+                {% if tendencia %}
+                <span class="head-muted">{{ tendencia|length }} registro{{ tendencia|length|pluralize:"s" }}</span>
+                {% endif %}
+            </div>
+
+            {% if puntos_tendencia %}
+            <svg class="chart" viewBox="0 0 320 150" role="img"
+                 aria-label="Tendencia del índice de salud del proyecto">
+                <line class="chart-grid" x1="12" y1="12" x2="308" y2="12"></line>
+                <line class="chart-grid" x1="12" y1="44" x2="308" y2="44"></line>
+                <line class="chart-grid" x1="12" y1="76" x2="308" y2="76"></line>
+                <line class="chart-grid" x1="12" y1="108" x2="308" y2="108"></line>
+                <polyline class="chart-axis" points="12,12 12,138 308,138"></polyline>
+                <polyline class="line-blue"
+                          points="{% for punto in puntos_tendencia %}{{ punto.x }},{{ punto.y }} {% endfor %}"></polyline>
+                {% for punto in puntos_tendencia %}
+                <circle class="chart-point" cx="{{ punto.x }}" cy="{{ punto.y }}" r="3">
+                    <title>{{ punto.fecha|date:"d/m/Y" }}: {{ punto.indice }}%</title>
+                </circle>
+                {% endfor %}
+            </svg>
+            <div class="chart-labels">
+                {% for registro in tendencia %}
+                <span>{{ registro.fecha|date:"d/m" }}</span>
+                {% endfor %}
+            </div>
+            <p class="chart-note">El tablero guarda un registro de salud por día.</p>
+            {% else %}
+            <div class="placeholder-block placeholder-block-sm">
+                <svg class="icon"><use href="#i-metrics"></use></svg>
+                <p>Sin historial de salud todavía</p>
+                <span>La tendencia aparece cuando el proyecto tenga técnicas en seguimiento.</span>
+            </div>
+            {% endif %}
+        </section>
+    </div>
+
+    <div class="dash-right">
+        <section class="card">
+            <div class="card-head">
+                <h3>Composición del Equipo</h3>
+                <span class="head-muted">{{ equipo|length }} miembro{{ equipo|length|pluralize:"s" }}</span>
+            </div>
+            <div class="team-list team-list-scroll">
+                {% for miembro in equipo %}
+                <div class="member">
+                    <div>
+                        <div class="member-name">{{ miembro.persona.nombre }}</div>
+                        <div class="member-role">Miembro activo</div>
+                    </div>
+                    <span class="role-tag">{{ miembro.rol }}</span>
+                </div>
+                {% empty %}
+                <p class="muted">Equipo sin configurar.</p>
+                {% endfor %}
+            </div>
+            <div class="detail-actions">
+                <a class="btn btn-outline btn-sm" href="{% url 'reportes:editar_equipo' proyecto.pk %}">
+                    <svg class="icon icon-sm"><use href="#i-group"></use></svg>
+                    Gestionar equipo
+                </a>
+            </div>
+        </section>
+
+        <div class="dash-lower">
+            <section class="card">
+                <div class="card-head">
+                    <h3>Métricas Aplicadas</h3>
+                    <a class="link" href="{% url 'reportes:metricas' proyecto.pk %}">Gestionar</a>
+                </div>
+                <div class="placeholder-block">
+                    <svg class="icon"><use href="#i-metrics"></use></svg>
+                    <p>Sin métricas configuradas</p>
+                    <span>Aplica un modelo de calidad al proyecto para ver sus métricas aquí.</span>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-head">
+                    <h3>Técnicas QA Aplicadas</h3>
+                    <a class="link" href="{% url 'tecnicas:seguimiento' %}">Configurar</a>
+                </div>
+                {% for seguimiento in seguimientos %}
+                <div class="tech-item">
+                    {% if seguimiento.tecnica.dimension == 'ESPECIFICACION' %}
+                    <span class="tech-icon blue"><svg class="icon"><use href="#i-clipboard"></use></svg></span>
+                    {% elif seguimiento.tecnica.dimension == 'DISENO' %}
+                    <span class="tech-icon purple"><svg class="icon"><use href="#i-layers"></use></svg></span>
+                    {% elif seguimiento.tecnica.dimension == 'DESARROLLO' %}
+                    <span class="tech-icon green"><svg class="icon"><use href="#i-code"></use></svg></span>
+                    {% else %}
+                    <span class="tech-icon amber"><svg class="icon"><use href="#i-shield"></use></svg></span>
+                    {% endif %}
+                    <span class="tech-name">{{ seguimiento.tecnica.nombre }}</span>
+                    {% if seguimiento.porcentaje_avance >= 100 %}
+                    <span class="tech-status green">Completada</span>
+                    {% elif seguimiento.porcentaje_avance > 0 %}
+                    <span class="tech-status amber">{{ seguimiento.porcentaje_avance }}%</span>
+                    {% else %}
+                    <span class="tech-status gray">Pendiente</span>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <p class="muted">Este proyecto no tiene técnicas en seguimiento.</p>
+                {% endfor %}
+            </section>
+        </div>
+    </div>
+</div>
+{% endblock %}
