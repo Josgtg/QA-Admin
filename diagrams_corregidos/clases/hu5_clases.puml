@@ -1,0 +1,151 @@
+@startuml hu5_clases
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam nodesep 60
+skinparam ranksep 80
+top to bottom direction
+
+title Clases: catálogo y seguimiento de técnicas QA (HU-04 y HU-05)
+
+package "tecnicas.template" #E1F5EE {
+  class SeleccionTecnicaTemplate
+}
+
+package "tecnicas.view" #E1F5EE {
+  class SeguirTecnicaView {
+    + seguir_tecnica(proyecto: Proyecto, tecnica: TecnicaQA): SeguimientoTecnica
+    + remover_tecnica(seguimiento: SeguimientoTecnica): void
+  }
+}
+
+package "tecnicas.model" #E1F5EE {
+  enum Dimension {
+    ESPECIFICACION
+    DISENO
+    DESARROLLO
+    CONFORMIDAD
+  }
+
+  enum TipoControl {
+    VERIFICACION
+    VALIDACION
+  }
+
+  class TecnicaQA {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - objetivo: String
+    - pregunta_clave: String
+    - dimension: Dimension
+    - tipo_control: TipoControl
+    + obtener_pasos(): List<Paso>
+  }
+
+  class Paso {
+    - id: int
+    - orden: int
+    - instruccion: String
+    - evidencia_esperada: String
+  }
+
+  class SeguimientoTecnica {
+    - id: int
+    - porcentaje_avance: Float
+    - activa: boolean
+    + tiene_evidencias_registradas(): boolean
+    + calcular_avance(): Float
+    + desactivar(): void
+  }
+
+  class SeguimientoPaso {
+    - id: int
+    - completado: boolean
+    - comentario: String
+    - fecha_completado: Date
+    + marcar_completado(): void
+    + esta_completado(): boolean
+  }
+
+  class Evidencia {
+    - id: int
+    - enlace: String
+    - archivo: String
+    - fecha_registro: Date
+    + tiene_enlace_o_archivo(): boolean
+    + clean(): void
+  }
+}
+
+package "reportes.model" #FAEEDA {
+  class Persona {
+    - id: int
+    - nombre: String
+  }
+
+  class Proyecto {
+    - id: int
+    - nombre: String
+    - fecha_inicio: Date
+    - fecha_fin: Date
+    + periodo(): String
+  }
+
+  class MiembroProyecto {
+    - id: int
+    - rol: String
+    - activo: boolean
+    + clean(): void
+    + desactivar(): void
+    + reactivar(): void
+  }
+}
+
+TecnicaQA "1" *-- "1..*" Paso : define
+TecnicaQA --> Dimension
+TecnicaQA --> TipoControl
+
+Persona "1" --> "0..*" MiembroProyecto : participa como
+Proyecto "1" *-- "0..*" MiembroProyecto : equipo
+
+SeguimientoTecnica "*" --> "1" Proyecto : sigue
+SeguimientoTecnica "*" --> "1" TecnicaQA : aplica
+SeguimientoTecnica "1" *-- "1..*" SeguimientoPaso : desglosa
+SeguimientoPaso "*" --> "1" Paso : ejecuta
+SeguimientoPaso "1" --> "0..1" Evidencia : se respalda con
+Evidencia "*" --> "1" MiembroProyecto : autor
+
+SeleccionTecnicaTemplate ..> SeguirTecnicaView : dispara solicitud
+SeguirTecnicaView ..> SeguimientoTecnica : crea / desactiva
+
+note right of SeguimientoTecnica
+  La app tecnicas referencia a reportes.Proyecto
+  y reportes.MiembroProyecto; reportes no
+  referencia a tecnicas. Quitar una técnica la
+  desactiva (activa = False) y conserva sus
+  evidencias. Las evidencias se alcanzan a través
+  de sus SeguimientoPaso.
+end note
+
+note bottom of SeguimientoPaso
+  Un paso no se marca completado sin evidencia.
+  marcar_completado() valida que exista una
+  Evidencia asociada y registra fecha y autor.
+end note
+
+note bottom of Evidencia
+  Cada Evidencia respalda un único
+  SeguimientoPaso (FK seguimiento_paso_id,
+  UNIQUE). Debe tener enlace o archivo; el autor
+  debe ser MiembroProyecto del mismo Proyecto
+  (se valida en clean()).
+end note
+
+note bottom of MiembroProyecto
+  Regla: el autor de una Evidencia debe ser
+  MiembroProyecto del mismo Proyecto
+  (se valida en clean()).
+end note
+@enduml

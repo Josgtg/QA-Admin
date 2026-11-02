@@ -1,0 +1,56 @@
+@startuml hu7_clases
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype polyline
+skinparam packageStyle rectangle
+skinparam nodesep 70
+skinparam ranksep 90
+top to bottom direction
+
+title Clases: proyectos por periodo (HU-07)
+
+package "reportes.template" #FAEEDA {
+  class ListaProyectosTemplate
+}
+
+package "reportes.view" #FAEEDA {
+  class ListaProyectosView {
+    + listar_proyectos(periodo: String, busqueda: String): List<Proyecto>
+    + agrupar_por_periodo(proyectos: List<Proyecto>): Map
+    + periodos_disponibles(): List<String>
+  }
+}
+
+package "reportes.model" #FAEEDA {
+  class Proyecto {
+    - id: int
+    - nombre: String
+    - fecha_inicio: Date
+    - fecha_fin: Date
+    + periodo(): String
+    + esta_en_periodo(periodo: String): boolean
+    + indice_salud(): Float
+  }
+}
+
+ListaProyectosTemplate ..> ListaProyectosView : dispara solicitud
+ListaProyectosView ..> Proyecto : consulta y filtra
+ListaProyectosView ..> ListaProyectosTemplate : renderiza
+
+note bottom of Proyecto
+  No existe la entidad Periodo. periodo() deriva
+  "Futuro", "Activo" o "Terminado" de fecha_inicio
+  y fecha_fin; no se guarda en la base de datos.
+  fecha_inicio y fecha_fin son obligatorias para
+  que todo proyecto tenga periodo.
+end note
+
+note right of ListaProyectosView
+  Con filtro: solo los proyectos del periodo
+  elegido. Sin filtro: todos, agrupados por
+  periodo(); los grupos se ordenan por la
+  fecha_inicio más reciente de cada uno y,
+  dentro del grupo, por fecha_inicio
+  descendente. Sin resultados: lista vacía.
+end note
+@enduml

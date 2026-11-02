@@ -1,0 +1,222 @@
+@startuml er_mvp_calidad
+hide circle
+skinparam shadowing false
+skinparam linetype polyline
+skinparam nodesep 50
+skinparam ranksep 50
+skinparam packageStyle rectangle
+skinparam entity {
+  BackgroundColor White
+}
+
+title E-R general del MVP de calidad (Django MVT: apps reportes, modelos y tecnicas)
+
+package "app: reportes" #FAEEDA {
+  entity "Persona" as Persona {
+    *id
+    --
+    nombre
+  }
+
+  entity "Proyecto" as Proyecto {
+    *id
+    --
+    nombre
+    fecha_inicio
+    fecha_fin
+  }
+
+  entity "MiembroProyecto" as MiembroProyecto {
+    *id
+    --
+    rol
+    activo
+  }
+}
+
+package "app: modelos" #EEEDFE {
+  entity "Caracteristica" as Caracteristica {
+    *id
+    --
+    nombre
+    descripcion
+  }
+
+  entity "Metrica" as Metrica {
+    *id
+    --
+    nombre
+    descripcion
+    unidad
+    valor_min
+    valor_max
+  }
+
+  entity "ModeloCalidad" as ModeloCalidad {
+    *id
+    --
+    nombre
+    descripcion
+    predefinido
+  }
+
+  entity "ModeloMetrica" as ModeloMetrica {
+    *id
+    --
+    umbral
+    tipo_umbral
+    activa
+  }
+
+  entity "ModeloAplicado" as ModeloAplicado {
+    *id
+    --
+    fecha_aplicacion
+    fecha_cierre
+    vigente
+  }
+
+  entity "MetricaAplicada" as MetricaAplicada {
+    *id
+    --
+    umbral
+    tipo_umbral
+    activa
+  }
+
+  entity "RevisionMetrica" as RevisionMetrica {
+    *id
+    --
+    valor
+    fecha
+    enlace
+    archivo
+    cumple
+  }
+}
+
+package "app: tecnicas" #E1F5EE {
+  entity "TecnicaQA" as TecnicaQA {
+    *id
+    --
+    nombre
+    descripcion
+    objetivo
+    pregunta_clave
+    dimension
+    tipo_control
+  }
+
+  entity "Paso" as Paso {
+    *id
+    --
+    orden
+    instruccion
+    evidencia_esperada
+  }
+
+  entity "SeguimientoTecnica" as SeguimientoTecnica {
+    *id
+    --
+    porcentaje_avance
+    activa
+  }
+
+  entity "SeguimientoPaso" as SeguimientoPaso {
+    *id
+    --
+    completado
+    comentario
+    fecha_completado
+  }
+
+  entity "Evidencia" as Evidencia {
+    *id
+    --
+    enlace
+    archivo
+    fecha_registro
+  }
+}
+
+Persona ||--o{ MiembroProyecto : "participa como"
+Proyecto ||--o{ MiembroProyecto : tiene
+
+Caracteristica ||--o{ Metrica : agrupa
+ModeloCalidad ||--o{ ModeloMetrica : incluye
+Metrica ||--o{ ModeloMetrica : "se configura en"
+
+Proyecto ||--o{ ModeloAplicado : "historial de aplicaciones"
+ModeloCalidad ||--o{ ModeloAplicado : "se usa en"
+ModeloAplicado ||--|{ MetricaAplicada : "instantánea de"
+Metrica ||--o{ MetricaAplicada : "se aplica como"
+
+MetricaAplicada ||--o{ RevisionMetrica : "se mide en"
+MiembroProyecto ||--o{ RevisionMetrica : "autor de"
+
+Proyecto ||--o{ SeguimientoTecnica : sigue
+TecnicaQA ||--o{ SeguimientoTecnica : "se elige en"
+TecnicaQA ||--|{ Paso : define
+SeguimientoTecnica ||--|{ SeguimientoPaso : desglosa
+Paso ||--o{ SeguimientoPaso : "se ejecuta en"
+SeguimientoPaso ||--o| Evidencia : "se respalda con"
+MiembroProyecto ||--o{ Evidencia : "autor de"
+
+note bottom of MiembroProyecto
+  Todo autor (de una RevisionMetrica o de una
+  Evidencia) debe ser MiembroProyecto del
+  mismo Proyecto. Se valida en clean().
+end note
+
+note bottom of Proyecto
+  El periodo es un estado derivado de las fechas
+  (futuro, activo o terminado); no se guarda.
+end note
+
+note bottom of ModeloAplicado
+  Un proyecto puede tener varias aplicaciones a lo
+  largo del tiempo. Como máximo una está vigente;
+  cambiar de modelo cierra la anterior y crea una
+  nueva. El historial no se borra.
+end note
+
+note bottom of MetricaAplicada
+  Instantánea inmutable de ModeloMetrica al aplicar
+  el modelo: copia umbral, tipo_umbral y activa.
+  RevisionMetrica se registra contra esta instantánea.
+  Si una métrica existe en el modelo anterior y en el
+  nuevo, conserva su historial y su último valor
+  porque apunta a la misma Metrica; el cumplimiento
+  vigente se recalcula con el umbral actual.
+end note
+
+note bottom of ModeloMetrica
+  tipo_umbral indica la dirección del cumplimiento:
+  MINIMO exige valor >= umbral; MAXIMO exige
+  valor <= umbral.
+end note
+
+note bottom of Caracteristica
+  Las características forman parte del modelo de forma
+  derivada: un modelo tiene las características de las
+  métricas que incluye. El seguimiento por característica
+  no se guarda; se calcula contando las métricas
+  aceptadas en la característica.
+end note
+
+note bottom of RevisionMetrica
+  Exige valor, fecha y al menos un enlace o archivo.
+  El valor debe estar entre Metrica.valor_min y
+  valor_max. cumple se calcula contra la instantánea
+  MetricaAplicada y queda como resultado histórico;
+  el estado vigente se recalcula con la instantánea
+  actual.
+end note
+
+note bottom of Evidencia
+  Cada Evidencia respalda un único SeguimientoPaso
+  (relación 1:0..1). Un paso no se marca completado
+  sin evidencia; el autor de la evidencia es el autor
+  del paso.
+end note
+@enduml

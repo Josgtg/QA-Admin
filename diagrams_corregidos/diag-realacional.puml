@@ -1,0 +1,253 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam nodesep 55
+skinparam ranksep 70
+skinparam packageStyle rectangle
+skinparam entity {
+  BackgroundColor White
+  BorderColor #444444
+}
+
+title Modelo relacional formal — MVP de calidad (apps: reportes, modelos, tecnicas)
+
+' ─────────────────────────────────────────────────────────────
+' Leyenda:
+'   <<PK>>  Clave primaria
+'   <<FK>>  Clave foránea
+'   <<FK,U>> Clave foránea + restricción UNIQUE (relación 1:1)
+'   UNIQUE(a,b)  Restricción compuesta (ver nota al pie de la entidad)
+' ─────────────────────────────────────────────────────────────
+
+package "reportes" #FAEEDA {
+  entity "Persona" as persona {
+    * id           : BIGINT   <<PK>>
+    --
+    * nombre       : VARCHAR
+  }
+
+  entity "Proyecto" as proyecto {
+    * id           : BIGINT   <<PK>>
+    --
+    * nombre       : VARCHAR
+    * fecha_inicio : DATE
+    * fecha_fin    : DATE
+  }
+
+  entity "MiembroProyecto" as miembro_proyecto {
+    * id           : BIGINT   <<PK>>
+    --
+    * persona_id   : BIGINT   <<FK>>
+    * proyecto_id  : BIGINT   <<FK>>
+    * rol          : VARCHAR
+    * activo       : BOOLEAN
+  }
+  note right of miembro_proyecto
+    UNIQUE(persona_id, proyecto_id)
+  end note
+}
+
+package "modelos" #EEEDFE {
+  entity "Caracteristica" as caracteristica {
+    * id              : BIGINT   <<PK>>
+    --
+    * nombre          : VARCHAR
+      descripcion     : TEXT
+  }
+
+  entity "Metrica" as metrica {
+    * id               : BIGINT   <<PK>>
+    --
+    * caracteristica_id : BIGINT  <<FK>>
+    * nombre           : VARCHAR
+      descripcion      : TEXT
+    * unidad           : VARCHAR
+      valor_min        : NUMERIC
+      valor_max        : NUMERIC
+  }
+
+  entity "ModeloCalidad" as modelo_calidad {
+    * id              : BIGINT   <<PK>>
+    --
+    * nombre          : VARCHAR
+      descripcion     : TEXT
+    * predefinido      : BOOLEAN
+  }
+
+  entity "ModeloMetrica" as modelo_metrica {
+    * id                 : BIGINT   <<PK>>
+    --
+    * modelo_calidad_id  : BIGINT   <<FK>>
+    * metrica_id         : BIGINT   <<FK>>
+    * umbral             : NUMERIC
+    * tipo_umbral        : VARCHAR
+    * activa             : BOOLEAN
+  }
+  note right of modelo_metrica
+    UNIQUE(modelo_calidad_id, metrica_id)
+    CHECK (tipo_umbral IN ('MINIMO', 'MAXIMO'))
+    MINIMO: valor >= umbral
+    MAXIMO: valor <= umbral
+  end note
+
+  entity "ModeloAplicado" as modelo_aplicado {
+    * id                : BIGINT   <<PK>>
+    --
+    * proyecto_id       : BIGINT   <<FK>>
+    * modelo_calidad_id : BIGINT   <<FK>>
+    * fecha_aplicacion  : DATE
+      fecha_cierre      : DATE
+    * vigente           : BOOLEAN
+  }
+  note right of modelo_aplicado
+    Historial: un proyecto puede tener varias
+    aplicaciones. Índice único parcial:
+    UNIQUE(proyecto_id) WHERE vigente = TRUE
+    CHECK (vigente = (fecha_cierre IS NULL))
+    La aplicación debe generar al menos una
+    MetricaAplicada (se valida al aplicar).
+  end note
+
+  entity "MetricaAplicada" as metrica_aplicada {
+    * id                 : BIGINT   <<PK>>
+    --
+    * modelo_aplicado_id : BIGINT   <<FK>>
+    * metrica_id         : BIGINT   <<FK>>
+    * umbral             : NUMERIC
+    * tipo_umbral        : VARCHAR
+    * activa             : BOOLEAN
+  }
+  note right of metrica_aplicada
+    UNIQUE(modelo_aplicado_id, metrica_id)
+    CHECK (tipo_umbral IN ('MINIMO', 'MAXIMO'))
+    Instantánea inmutable de ModeloMetrica.
+    Si una métrica se repite en otro modelo,
+    conserva su identidad por metrica_id.
+  end note
+
+  entity "RevisionMetrica" as revision_metrica {
+    * id                  : BIGINT   <<PK>>
+    --
+    * metrica_aplicada_id : BIGINT   <<FK>>
+    * miembro_proyecto_id : BIGINT   <<FK>>
+    * valor               : NUMERIC
+    * fecha               : DATE
+      enlace              : VARCHAR
+      archivo             : VARCHAR
+    * cumple              : BOOLEAN
+  }
+  note right of revision_metrica
+    CHECK (enlace IS NOT NULL OR archivo IS NOT NULL)
+    Proyecto y Metrica se obtienen a través de
+    metrica_aplicada; no se duplican FKs.
+    El miembro_proyecto_id debe pertenecer al
+    proyecto de metrica_aplicada (clean()).
+    El historial por métrica se conserva aunque
+    cambie el modelo, si la métrica es común.
+    cumple es histórico; el estado vigente se
+    recalcula con el umbral de la instantánea
+    vigente.
+  end note
+}
+
+package "tecnicas" #E1F5EE {
+  entity "TecnicaQA" as tecnica_qa {
+    * id              : BIGINT   <<PK>>
+    --
+    * nombre          : VARCHAR
+      descripcion     : TEXT
+      objetivo        : TEXT
+      pregunta_clave  : TEXT
+    * dimension       : VARCHAR
+    * tipo_control    : VARCHAR
+  }
+
+  entity "Paso" as paso {
+    * id                  : BIGINT   <<PK>>
+    --
+    * tecnica_qa_id       : BIGINT   <<FK>>
+    * orden               : INTEGER
+    * instruccion         : TEXT
+      evidencia_esperada  : TEXT
+  }
+  note right of paso
+    UNIQUE(tecnica_qa_id, orden)
+  end note
+
+  entity "SeguimientoTecnica" as seguimiento_tecnica {
+    * id                : BIGINT   <<PK>>
+    --
+    * proyecto_id       : BIGINT   <<FK>>
+    * tecnica_qa_id     : BIGINT   <<FK>>
+    * porcentaje_avance : NUMERIC
+    * activa            : BOOLEAN
+  }
+  note right of seguimiento_tecnica
+    UNIQUE(proyecto_id, tecnica_qa_id)
+  end note
+
+  entity "SeguimientoPaso" as seguimiento_paso {
+    * id                    : BIGINT   <<PK>>
+    --
+    * seguimiento_tecnica_id : BIGINT  <<FK>>
+    * paso_id               : BIGINT   <<FK>>
+    * completado            : BOOLEAN
+      comentario            : TEXT
+      fecha_completado      : DATETIME
+  }
+  note right of seguimiento_paso
+    UNIQUE(seguimiento_tecnica_id, paso_id)
+    Un paso no se completa sin evidencia.
+    El autor del paso es el autor de su evidencia.
+  end note
+
+  entity "Evidencia" as evidencia {
+    * id                  : BIGINT   <<PK>>
+    --
+    * seguimiento_paso_id : BIGINT   <<FK,U>>
+    * miembro_proyecto_id : BIGINT   <<FK>>
+      enlace              : VARCHAR
+      archivo             : VARCHAR
+    * fecha_registro      : DATETIME
+  }
+  note right of evidencia
+    UNIQUE(seguimiento_paso_id): como máximo una
+    evidencia por paso.
+    CHECK (enlace IS NOT NULL OR archivo IS NOT NULL)
+    El miembro_proyecto_id debe pertenecer al
+    proyecto de seguimiento_paso (clean()).
+  end note
+}
+
+' ─────────────────────────────────────────────────────────────
+' Relaciones (cardinalidades crow's foot, etiqueta = FK)
+' ─────────────────────────────────────────────────────────────
+
+persona              ||--o{ miembro_proyecto   : "persona_id   (1 : 0..N)"
+proyecto             ||--o{ miembro_proyecto   : "proyecto_id  (1 : 0..N)"
+
+caracteristica       ||--o{ metrica            : "caracteristica_id (1 : 0..N)"
+
+modelo_calidad       ||--o{ modelo_metrica     : "modelo_calidad_id (1 : 0..N)"
+metrica              ||--o{ modelo_metrica     : "metrica_id (1 : 0..N)"
+
+proyecto             ||--o{ modelo_aplicado    : "proyecto_id (1 : 0..N)"
+modelo_calidad       ||--o{ modelo_aplicado    : "modelo_calidad_id (1 : 0..N)"
+
+modelo_aplicado      ||--|{ metrica_aplicada   : "modelo_aplicado_id (1 : 1..N)"
+metrica              ||--o{ metrica_aplicada   : "metrica_id (1 : 0..N)"
+
+metrica_aplicada     ||--o{ revision_metrica   : "metrica_aplicada_id (1 : 0..N)"
+miembro_proyecto     ||--o{ revision_metrica   : "miembro_proyecto_id (1 : 0..N)"
+
+proyecto             ||--o{ seguimiento_tecnica : "proyecto_id (1 : 0..N)"
+tecnica_qa           ||--o{ seguimiento_tecnica : "tecnica_qa_id (1 : 0..N)"
+
+tecnica_qa           ||--|{ paso               : "tecnica_qa_id (1 : 1..N)"
+seguimiento_tecnica  ||--|{ seguimiento_paso   : "seguimiento_tecnica_id (1 : 1..N)"
+paso                 ||--o{ seguimiento_paso   : "paso_id (1 : 0..N)"
+
+seguimiento_paso     ||--o| evidencia          : "seguimiento_paso_id (1 : 0..1)"
+miembro_proyecto     ||--o{ evidencia          : "miembro_proyecto_id (1 : 0..N)"
+@enduml

@@ -1,0 +1,112 @@
+@startuml hu1_secuencia
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer"
+  participant "RevisionMetricaTemplate" as Template
+end box
+
+box "View Layer (modelos.view)"
+  participant "RegistrarRevisionMetricaView" as View
+end box
+
+box "Model Layer (reportes.model / modelos.model)"
+  participant "p: Proyecto" as Proyecto
+  participant "m: Metrica" as Metrica
+  participant "ma: MetricaAplicada" as Snapshot
+  participant "mp: MiembroProyecto" as Miembro
+  participant "c: Caracteristica" as Caracteristica
+end box
+
+== Registrar revisión de métrica y calcular seguimiento (HU-01) ==
+
+Encargado -> Template: abrir(proyecto_id, metrica_id)
+Template -> View: get(request, proyecto_id, metrica_id)
+activate View
+
+View -> Proyecto: modelo_aplicado_vigente()
+activate Proyecto
+Proyecto --> View: ma_vigente: ModeloAplicado
+deactivate Proyecto
+
+View -> ma_vigente: metrica_aplicada(metrica)
+activate ma_vigente
+ma_vigente --> View: snapshot: MetricaAplicada (umbral, tipo_umbral, activa)
+deactivate ma_vigente
+
+View -> Metrica: ultima_revision(proyecto)
+activate Metrica
+Metrica --> View: ultima: RevisionMetrica
+deactivate Metrica
+
+View -> Metrica: ultimo_valor(proyecto)
+Metrica --> View: valor_ultimo: Float
+
+View --> Template: render(form, snapshot, ultima, valor_ultimo)
+deactivate View
+
+Template --> Encargado: muestra formulario con umbral, tipo_umbral y último valor medido
+
+Encargado -> Template: enviar(valor, fecha, enlace, archivo)
+Template -> View: post(request, proyecto_id, metrica_id)
+activate View
+
+View -> Metrica: validar_rango(valor)
+activate Metrica
+Metrica --> View: rango_ok: boolean
+deactivate Metrica
+
+alt valor fuera de [valor_min, valor_max]
+    View --> Template: HttpResponse (400, error de rango)
+    Template --> Encargado: corrige el valor
+else sin enlace ni archivo
+    View -> Snapshot: tiene_evidencia()
+    activate Snapshot
+    Snapshot --> View: ok: boolean
+    deactivate Snapshot
+    alt no tiene enlace ni archivo
+        View --> Template: HttpResponse (400, evidencia requerida)
+        Template --> Encargado: adjunta enlace o archivo
+    end
+else todo válido
+    View -> Proyecto: revisiones()
+    activate Proyecto
+    Proyecto --> View: historial: List<RevisionMetrica>
+    deactivate Proyecto
+
+    create participant "r: RevisionMetrica" as Revision
+    View -> Revision: RevisionMetrica(metrica_aplicada=snapshot, miembro_proyecto=autor, valor, fecha, enlace, archivo)
+    activate Revision
+    Revision -> Miembro: clean()
+    activate Miembro
+    Miembro --> Revision: autor válido del mismo proyecto
+    deactivate Miembro
+    Revision -> Revision: calcular_cumple()
+    Revision --> View: r: RevisionMetrica (cumple calculado contra la instantánea)
+    deactivate Revision
+
+    View -> Metrica: esta_aceptada(proyecto)
+    activate Metrica
+    Metrica --> View: aceptada: boolean
+    deactivate Metrica
+
+    View -> Caracteristica: calcular_seguimiento(proyecto)
+    activate Caracteristica
+    Caracteristica --> View: porcentaje: Float (aceptadas / activas * 100)
+    deactivate Caracteristica
+
+    View --> Template: HttpResponse (200, revisión guardada + seguimiento)
+    deactivate View
+    Template --> Encargado: muestra cumplimiento actualizado y seguimiento de la característica
+end
+
+deactivate View
+
+opt El encargado cancela
+    Encargado -> Template: cancelar()
+    Template --> Encargado: conserva la revisión anterior, sin cambios
+end
+
+@enduml

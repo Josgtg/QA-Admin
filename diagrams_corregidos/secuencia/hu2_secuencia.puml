@@ -5,18 +5,19 @@ skinparam responseMessageBelowArrow true
 actor "Encargado de QA" as Encargado
 
 box "Template Layer"
-participant "SeleccionModeloTemplate" as UI
+  participant "SeleccionModeloTemplate" as UI
 end box
 
 box "View Layer (modelos.view)"
-participant "AplicarModeloView" as View
+  participant "AplicarModeloView" as View
 end box
 
 box "Model Layer"
-participant "ModeloCalidad" as Modelo
-participant "p: Proyecto" as Proyecto
-participant "anterior: AplicacionModelo" as Anterior
-participant "MetricaAplicada" as Instantanea
+  participant "ModeloCalidad" as Modelo
+  participant "p: Proyecto" as Proyecto
+  participant "ma_vigente: ModeloAplicado" as AplicacionVigente
+  participant "ma_nueva: ModeloAplicado" as NuevaAplicacion
+  participant "MetricaAplicada" as Instantanea
 end box
 
 == Seleccionar y aplicar modelo de calidad (HU-02) ==
@@ -24,49 +25,61 @@ end box
 Encargado -> UI: abrir(proyectoId)
 UI -> View: get(request, proyectoId)
 activate View
-View -> Modelo: obtenerPredefinidos()
+
+View -> Modelo: obtener_predefinidos()
+activate Modelo
 Modelo --> View: modelos: List<ModeloCalidad> (con características y métricas)
+deactivate Modelo
+
 View --> UI: HttpResponse (200, modelos)
 deactivate View
 UI --> Encargado: Muestra modelos, descripciones y características
 
-Encargado -> UI: seleccionar(modeloId, confirmacion)
+Encargado -> UI: seleccionar(modelo_id, confirmacion)
 note right of UI
-  request.POST contiene modeloId y confirmacion.
+  request.POST contiene modelo_id y confirmacion.
   modelo es el ModeloCalidad predefinido seleccionado.
 end note
-UI -> View: post(request, proyectoId)
+UI -> View: post(request, proyecto_id)
 activate View
-View -> Proyecto: obtenerAplicacionVigente()
-Proyecto --> View: anterior: AplicacionModelo o null
-View -> Proyecto: tieneMediciones()
-Proyecto --> View: hayMediciones: boolean
+
+View -> Proyecto: modelo_aplicado_vigente()
+activate Proyecto
+Proyecto --> View: anterior: ModeloAplicado o null
+deactivate Proyecto
+
+View -> Proyecto: tiene_mediciones()
+activate Proyecto
+Proyecto --> View: hay_mediciones: boolean
+deactivate Proyecto
 
 alt Mismo modelo ya vigente
     View --> UI: HttpResponse (200, anterior; sin cambios)
     UI --> Encargado: Modelo, características y métricas
 else Modelo diferente vigente, con mediciones y sin confirmación
-    View --> UI: HttpResponse (200, requiereConfirmacion=true)
+    View --> UI: HttpResponse (200, requiere_confirmacion=true)
     UI --> Encargado: Confirma o cancela
     note right of UI
       Confirmar inicia otro POST con confirmacion=true.
       Esta petición termina sin guardar cambios.
     end note
 else Primera aplicación, cambio sin mediciones o cambio confirmado
-    View -> Proyecto: aplicarModelo(modelo)
+    View -> Proyecto: aplicar_modelo(modelo)
     activate Proyecto
     opt Existe aplicación anterior
-        Proyecto -> Anterior: cerrar()
-        Anterior --> Proyecto: void (anterior conservada, vigente=false)
+        Proyecto -> AplicacionVigente: cerrar()
+        AplicacionVigente --> Proyecto: void (anterior conservada, vigente=false)
     end
-    create participant "nueva: AplicacionModelo" as Nueva
-    Proyecto -> Nueva: AplicacionModelo(proyecto, modelo)
+    create participant "nueva: ModeloAplicado" as Nueva
+    Proyecto -> Nueva: ModeloAplicado(proyecto, modelo)
     activate Nueva
-    Nueva -> Instantanea: crearDesdeModelo(nueva, modelo)
-    Instantanea --> Nueva: metricas: List<MetricaAplicada>
-    Nueva --> Proyecto: nueva: AplicacionModelo (vigente=true)
+    Nueva -> Instantanea: crear_instantanea()
+    activate Instantanea
+    Instantanea --> Nueva: metricas_aplicadas: List<MetricaAplicada>
+    deactivate Instantanea
+    Nueva --> Proyecto: nueva: ModeloAplicado (vigente=true)
     deactivate Nueva
-    Proyecto --> View: nueva: AplicacionModelo
+    Proyecto --> View: nueva: ModeloAplicado
     deactivate Proyecto
     View --> UI: HttpResponse (302, URL del detalle del proyecto)
     UI --> Encargado: Muestra modelo, características y métricas
@@ -78,4 +91,5 @@ opt Se solicitó confirmación y el encargado cancela
     Encargado -> UI: cancelar()
     UI --> Encargado: Conserva el modelo actual, sin guardar cambios
 end
+
 @enduml

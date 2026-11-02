@@ -1,0 +1,166 @@
+@startuml hu2_clases
+allowmixing
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype polyline
+skinparam packageStyle rectangle
+skinparam nodesep 70
+skinparam ranksep 90
+top to bottom direction
+
+title Clases: aplicar modelo de calidad al proyecto (HU-02)
+
+actor "Encargado de QA" as Encargado
+
+package "modelos.template" #EEEDFE {
+  class SeleccionModeloTemplate {
+    + abrir(proyecto_id: int): void
+    + seleccionar(modelo_id: int, confirmacion: boolean): void
+    + cancelar(): void
+  }
+}
+
+package "modelos.view" #EEEDFE {
+  class AplicarModeloView {
+    + get(request: HttpRequest, proyecto_id: int): HttpResponse
+    + post(request: HttpRequest, proyecto_id: int): HttpResponse
+    + obtener_modelo_aplicado_vigente(proyecto: Proyecto): ModeloAplicado
+    + solicitar_confirmacion(proyecto: Proyecto, modelo: ModeloCalidad): boolean
+  }
+}
+
+package "reportes.model" #FAEEDA {
+  class Proyecto {
+    - id: int
+    - nombre: String
+    - fecha_inicio: Date
+    - fecha_fin: Date
+    + periodo(): String
+    + historial_modelos(): List<ModeloAplicado>
+    + modelo_aplicado_vigente(): ModeloAplicado
+    + tiene_mediciones(): boolean
+    + aplicar_modelo(modelo: ModeloCalidad): ModeloAplicado
+  }
+}
+
+package "modelos.model" #EEEDFE {
+  enum TipoUmbral {
+    MINIMO
+    MAXIMO
+  }
+
+  class ModeloCalidad {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - predefinido: boolean
+    + {static} obtener_predefinidos(): List<ModeloCalidad>
+    + obtener_caracteristicas(): List<Caracteristica>
+    + obtener_modelo_metricas(): List<ModeloMetrica>
+  }
+
+  class Caracteristica {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    + obtener_metricas(): List<Metrica>
+  }
+
+  class Metrica {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - unidad: String
+    - valor_min: Float
+    - valor_max: Float
+    + validar_rango(valor: Float): boolean
+  }
+
+  class ModeloMetrica {
+    - id: int
+    - umbral: Float
+    - tipo_umbral: TipoUmbral
+    - activa: boolean
+    + evaluar_cumplimiento(valor: Float): boolean
+    + esta_activa(): boolean
+  }
+
+  class ModeloAplicado {
+    - id: int
+    - fecha_aplicacion: Date
+    - fecha_cierre: Date
+    - vigente: boolean
+    + es_vigente(): boolean
+    + cerrar(): void
+    + crear_instantanea(): void
+    + metricas_comunes(otro: ModeloAplicado): List<Metrica>
+  }
+
+  class MetricaAplicada {
+    - id: int
+    - umbral: Float
+    - tipo_umbral: TipoUmbral
+    - activa: boolean
+    + evaluar_cumplimiento(valor: Float): boolean
+    + esta_activa(): boolean
+  }
+}
+
+ModeloCalidad "1" --> "0..*" ModeloMetrica : incluye
+Metrica "1" --> "0..*" ModeloMetrica : se configura en
+Caracteristica "1" *-- "0..*" Metrica : agrupa
+Proyecto "1" --> "0..*" ModeloAplicado : historial de aplicaciones
+ModeloCalidad "1" --> "0..*" ModeloAplicado : se usa en
+ModeloAplicado "1" *-- "1..*" MetricaAplicada : instantánea
+Metrica "1" --> "0..*" MetricaAplicada : se aplica como
+ModeloMetrica --> TipoUmbral
+MetricaAplicada --> TipoUmbral
+
+Encargado ..> SeleccionModeloTemplate : interactúa
+SeleccionModeloTemplate ..> AplicarModeloView : solicitud
+AplicarModeloView ..> Proyecto : aplica modelo
+AplicarModeloView ..> ModeloCalidad : consulta catálogo
+AplicarModeloView ..> ModeloAplicado : crea / cierra
+AplicarModeloView ..> MetricaAplicada : copia instantánea
+
+note right of ModeloAplicado
+  Un proyecto puede tener varias aplicaciones
+  a lo largo del tiempo; como máximo una está
+  vigente. Cambiar de modelo cierra la anterior
+  y crea una nueva, sin borrar el historial ni
+  las revisiones de métricas.
+end note
+
+note bottom of MetricaAplicada
+  Instantánea inmutable de ModeloMetrica:
+  copia umbral, tipo_umbral y activa al aplicar
+  el modelo. Si una métrica existe en el modelo
+  anterior y en el nuevo, conserva su último
+  valor porque ambas instantáneas apuntan a la
+  misma Metrica; el cumplimiento vigente se
+  recalcula con el umbral de la nueva instantánea.
+end note
+
+note bottom of ModeloMetrica
+  tipo_umbral define la dirección:
+  MINIMO exige valor >= umbral;
+  MAXIMO exige valor <= umbral.
+end note
+
+note bottom of Proyecto
+  Proyecto vive en reportes.model.
+  tiene_mediciones() consulta RevisionMetrica
+  (HU-01) a través de las instantáneas del
+  proyecto; no se dibuja aquí para no duplicar
+  el diseño de esa historia.
+end note
+
+note bottom of ModeloCalidad
+  En HU-02 solo se ofrecen los modelos con
+  predefinido = true; los modelos propios
+  llegan en HU-16. Las características se
+  infieren recorriendo ModeloMetrica, Metrica
+  y Caracteristica; no hay composición directa
+  entre ModeloCalidad y Caracteristica.
+end note
+@enduml
