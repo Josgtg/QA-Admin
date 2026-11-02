@@ -5,19 +5,21 @@ skinparam responseMessageBelowArrow true
 actor "Encargado de QA" as QA
 
 box "Template Layer"
-participant "PrevisualizacionProyectoTemplate" as PreviewUI
-participant "TableroProyectoTemplate" as TableroUI
+  participant "PrevisualizacionProyectoTemplate" as PreviewUI
+  participant "TableroProyectoTemplate" as TableroUI
 end box
 
 box "View Layer (reportes.view)"
-participant "ListaProyectosView" as ListaView
-participant "TableroProyectoView" as TableroView
+  participant "ListaProyectosView" as ListaView
+  participant "TableroProyectoView" as TableroView
 end box
 
 box "Model Layer (reportes.model / modelos.model / tecnicas.model)"
-participant "p: Proyecto" as Proyecto
-participant "rm: RevisionMetrica" as Revision
-participant "st: SeguimientoTecnica" as Seguimiento
+  participant "p: Proyecto" as Proyecto
+  participant "ma: ModeloAplicado" as Aplicacion
+  participant "map: MetricaAplicada" as Instantanea
+  participant "rm: RevisionMetrica" as Revision
+  participant "st: SeguimientoTecnica" as Seguimiento
 end box
 
 == CA3 · Entrar al tablero ==
@@ -42,10 +44,22 @@ deactivate Proyecto
 
 TableroView -> Proyecto: revisiones()
 activate Proyecto
-Proyecto -> Revision: filter(proyecto_id=self.id)
-activate Revision
-Revision --> Proyecto: QuerySet<RevisionMetrica>
-deactivate Revision
+Proyecto -> Aplicacion: historial con vigente=true
+activate Aplicacion
+Aplicacion --> Proyecto: List<ModeloAplicado>
+deactivate Aplicacion
+loop "por cada aplicación"
+    Proyecto -> Instantanea: metricas_aplicadas()
+    activate Instantanea
+    Instantanea --> Proyecto: List<MetricaAplicada>
+    deactivate Instantanea
+    loop "por cada métrica aplicada"
+        Proyecto -> Revision: revisiones()
+        activate Revision
+        Revision --> Proyecto: QuerySet<RevisionMetrica> (de la instantánea)
+        deactivate Revision
+    end
+end
 Proyecto --> TableroView: QuerySet<RevisionMetrica>
 deactivate Proyecto
 
@@ -68,8 +82,10 @@ TableroUI --> QA: 200 OK · tablero del proyecto
 
 note right of TableroView
   CA4 · El tablero solo accede a los datos
-  vía métodos del Proyecto. Los querysets
-  están filtrados por self.id, así que es
+  vía métodos del Proyecto. revisiones()
+  recorre ModeloAplicado -> MetricaAplicada ->
+  RevisionMetrica; los querysets están
+  filtrados por self.id, así que es
   estructuralmente imposible mostrar filas
   de otro proyecto aunque el template itere
   de más.

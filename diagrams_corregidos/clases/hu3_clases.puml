@@ -1,0 +1,125 @@
+@startuml hu3_clases
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype polyline
+skinparam packageStyle rectangle
+skinparam nodesep 70
+skinparam ranksep 90
+top to bottom direction
+
+title Clases: catálogo de modelos de calidad predefinidos (HU-03)
+
+package "modelos.template" #EEEDFE {
+  class CatalogoModelosTemplate
+}
+
+package "modelos.view" #EEEDFE {
+  class CatalogoModelosView {
+    + obtener_modelos_base(): List<ModeloCalidad>
+    + obtener_detalle(modelo_id: int): ModeloCalidad
+  }
+}
+
+package "reportes.model" #FAEEDA {
+  class Proyecto {
+    - id: int
+    - nombre: String
+    - fecha_inicio: Date
+    - fecha_fin: Date
+    + periodo(): String
+  }
+}
+
+package "modelos.model" #EEEDFE {
+  enum TipoUmbral {
+    MINIMO
+    MAXIMO
+  }
+
+  class ModeloCalidad {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - predefinido: boolean
+    + {static} obtener_predefinidos(): List<ModeloCalidad>
+    + obtener_caracteristicas(): List<Caracteristica>
+    + obtener_modelo_metricas(): List<ModeloMetrica>
+  }
+
+  class Caracteristica {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    + obtener_metricas(): List<Metrica>
+  }
+
+  class Metrica {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - unidad: String
+    - valor_min: Float
+    - valor_max: Float
+    + validar_rango(valor: Float): boolean
+  }
+
+  class ModeloMetrica {
+    - id: int
+    - umbral: Float
+    - tipo_umbral: TipoUmbral
+    - activa: boolean
+    + evaluar_cumplimiento(valor: Float): boolean
+    + esta_activa(): boolean
+  }
+
+  class ModeloAplicado {
+    - id: int
+    - fecha_aplicacion: Date
+    - vigente: boolean
+    + es_vigente(): boolean
+  }
+}
+
+ModeloCalidad "1" --> "0..*" ModeloMetrica : incluye
+Metrica "1" --> "0..*" ModeloMetrica : se configura en
+Caracteristica "1" *-- "0..*" Metrica : agrupa
+Proyecto "1" --> "0..*" ModeloAplicado : historial de aplicaciones
+ModeloCalidad "1" --> "0..*" ModeloAplicado : se usa en
+ModeloMetrica --> TipoUmbral
+
+CatalogoModelosTemplate ..> CatalogoModelosView : dispara solicitud
+CatalogoModelosView ..> ModeloCalidad : consulta catálogo
+CatalogoModelosView ..> ModeloMetrica : lee umbral y tipo_umbral
+CatalogoModelosView ..> Caracteristica : agrupa por característica
+
+note right of ModeloCalidad
+  El catálogo de HU-03 muestra solo los
+  modelos con predefinido = true.
+end note
+
+note bottom of ModeloMetrica
+  La meta o umbral de cumplimiento y su
+  dirección viven aquí, no en Metrica.
+  MINIMO: valor >= umbral;
+  MAXIMO: valor <= umbral.
+  El rango admisible vive en
+  Metrica.valor_min/valor_max.
+end note
+
+note bottom of ModeloAplicado
+  Se incluye para coincidir con el E-R y el
+  relacional; el catálogo de HU-03 no crea
+  ni modifica aplicaciones. El historial de
+  aplicaciones y las instantáneas son parte
+  de HU-02/HU-01.
+end note
+
+note bottom of Caracteristica
+  Caracteristica es un catálogo global:
+  agrupa métricas. Un modelo incluye
+  métricas mediante ModeloMetrica; sus
+  características se infieren de esas
+  métricas. No hay FK directa de
+  Caracteristica a ModeloCalidad.
+end note
+@enduml

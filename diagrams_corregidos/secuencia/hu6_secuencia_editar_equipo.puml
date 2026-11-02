@@ -116,7 +116,7 @@ end
 
 note over EditarView
   Al volver a ListaProyectosView la previsualizacion
-  usa equipoActivo() y ya refleja la reactivacion:
+  usa equipo_activo() y ya refleja la reactivacion:
   el miembro vuelve a aparecer.
 end note
 @enduml
