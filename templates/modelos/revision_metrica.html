@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+
+{% block title %}Revisar {{ metrica.nombre }} · {{ proyecto.nombre }} · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <a class="back-link" href="{% url 'reportes:metricas' proyecto.pk %}">
+            <svg class="icon icon-xs"><use href="#i-arrow-left"></use></svg>
+            Volver a métricas
+        </a>
+        <h2>Registrar revisión de métrica</h2>
+        <p class="subtitle">
+            {{ proyecto.nombre }} · {{ metrica.caracteristica.nombre }} ·
+            <strong>{{ metrica.nombre }}</strong>
+        </p>
+    </div>
+</div>
+
+{% if messages %}
+<div class="flash-stack">
+    {% for message in messages %}
+    <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="detail-grid">
+    <section class="card">
+        <div class="card-head">
+            <h3>Configuración vigente</h3>
+            {% if seguimiento is not None %}
+            <span class="head-muted">{{ seguimiento }}% de la característica</span>
+            {% endif %}
+        </div>
+        <dl class="detail-list">
+            <dt>Umbral</dt>
+            <dd>
+                {% if instantanea.tipo_umbral == 'MINIMO' %}≥{% else %}≤{% endif %}
+                {{ instantanea.umbral|floatformat:'-2' }} {{ metrica.unidad }}
+            </dd>
+            <dt>Rango admisible</dt>
+            <dd>
+                {% if metrica.valor_min is not None %}{{ metrica.valor_min|floatformat:'-2' }}{% else %}—{% endif %}
+                –
+                {% if metrica.valor_max is not None %}{{ metrica.valor_max|floatformat:'-2' }}{% else %}—{% endif %}
+            </dd>
+            <dt>Último valor medido</dt>
+            <dd>
+                {% if valor_ultimo is not None %}
+                {{ valor_ultimo|floatformat:'-2' }} {{ metrica.unidad }}
+                {% else %}
+                <span class="health-empty">Sin medición</span>
+                {% endif %}
+            </dd>
+            <dt>Estado</dt>
+            <dd>
+                {% if valor_ultimo is None %}
+                <span class="status gray">Sin medición</span>
+                {% elif aceptada %}
+                <span class="status green">Cumple</span>
+                {% else %}
+                <span class="status gray">No cumple</span>
+                {% endif %}
+            </dd>
+        </dl>
+    </section>
+
+    <section class="card">
+        <div class="card-head">
+            <h3>Nueva medición</h3>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" novalidate>
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="flash flash-error">{{ form.non_field_errors|striptags }}</div>
+            {% endif %}
+
+            <div class="form-grid">
+                <div class="field">
+                    <label for="{{ form.valor.id_for_label }}">
+                        {{ form.valor.label }} <span class="field-required">*</span>
+                    </label>
+                    {{ form.valor }}
+                    {% if form.valor.errors %}
+                    <div class="field-error">{{ form.valor.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field">
+                    <label for="{{ form.fecha.id_for_label }}">
+                        {{ form.fecha.label }} <span class="field-required">*</span>
+                    </label>
+                    {{ form.fecha }}
+                    {% if form.fecha.errors %}
+                    <div class="field-error">{{ form.fecha.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field field-wide">
+                    <label for="{{ form.enlace.id_for_label }}">
+                        {{ form.enlace.label }}
+                    </label>
+                    {{ form.enlace }}
+                    {% if form.enlace.errors %}
+                    <div class="field-error">{{ form.enlace.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field field-wide">
+                    <label for="{{ form.archivo.id_for_label }}">
+                        {{ form.archivo.label }}
+                    </label>
+                    {{ form.archivo }}
+                    <p class="field-hint">Adjunta un enlace o un archivo.</p>
+                    {% if form.archivo.errors %}
+                    <div class="field-error">{{ form.archivo.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field field-wide">
+                    <label for="{{ form.miembro_proyecto.id_for_label }}">
+                        {{ form.miembro_proyecto.label }} <span class="field-required">*</span>
+                    </label>
+                    {{ form.miembro_proyecto }}
+                    {% if form.miembro_proyecto.errors %}
+                    <div class="field-error">{{ form.miembro_proyecto.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="detail-actions">
+                <button class="btn btn-primary" type="submit">Guardar revisión</button>
+                <a class="btn btn-outline" href="{% url 'reportes:metricas' proyecto.pk %}">Cancelar</a>
+            </div>
+        </form>
+    </section>
+</div>
+
+{% include 'modelos/_historial_metricas.html' with historial=historial metrica=metrica %}
+{% endblock %}

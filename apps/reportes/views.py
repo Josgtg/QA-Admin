@@ -1,4 +1,5 @@
 import math
+from datetime import date
 
 from django.contrib import messages
 from django.db import transaction
@@ -6,7 +7,6 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
-from apps.tecnicas.models import Proyecto
 from apps.tecnicas.selection import (
     SESSION_KEY,
     obtener_proyecto_seleccionado,
@@ -18,6 +18,7 @@ from .models import (
     MiembroProyecto,
     Periodo,
     Persona,
+    Proyecto,
     registrar_salud,
     tendencia_salud,
 )
@@ -38,19 +39,18 @@ class InicioView(View):
 
 class ListaProyectosView(View):
     template_name = 'reportes/lista_proyectos.html'
-    filtros = {
-        'todos': None,
-        'activos': Periodo.ACTIVO,
-        'planificacion': Periodo.FUTURO,
-        'cerrados': Periodo.TERMINADO,
-    }
-    filtros_por_periodo = {
-        'activo': 'activos',
-        'futuro': 'planificacion',
-        'terminado': 'cerrados',
-    }
 
     def get(self, request: HttpRequest) -> HttpResponse:
+        accion = request.GET.get('ir')
+        if accion == 'crear':
+            return self.ir_a_crear()
+        if accion in {'editar', 'tablero'}:
+            proyecto = self._proyecto_de(request)
+            if proyecto is not None:
+                if accion == 'editar':
+                    return self.ir_a_editar(proyecto)
+                return self.ir_a_tablero(proyecto)
+
         try:
             periodo_seleccionado = Periodo.desde_parametro(
                 request.GET.get('periodo')
@@ -59,107 +59,101 @@ class ListaProyectosView(View):
             raise Http404(str(error)) from error
 
         busqueda = (request.GET.get('q') or '').strip()
-        filtro = request.GET.get('filtro', 'todos')
-        if filtro not in self.filtros:
-            filtro = 'todos'
 
-        if periodo_seleccionado:
-            filtro = self.filtros_por_periodo.get(
-                periodo_seleccionado.id, filtro
-            )
-        else:
-            estado = self.filtros[filtro]
-            if estado:
-                periodo_seleccionado = Periodo(estado)
-
-        proyectos = list(
-            Proyecto.objects.prefetch_related(
-                'equipo__persona', 'seguimientos'
-            ).order_by('-fecha_inicio', 'nombre')
-        )
-        for proyecto in proyectos:
-            proyecto.periodo_actual = proyecto.periodo()
-            proyecto.salud_actual = proyecto.indice_salud()
-
-        conteos = self.contar_por_periodo(proyectos)
-        periodos = Periodo.obtener_recientes()
-        if periodo_seleccionado and periodo_seleccionado not in periodos:
-            periodos.append(periodo_seleccionado)
-
-        grupos_todos = {
-            periodo.id: self._grupo(periodo, proyectos)
-            for periodo in periodos
-        }
-        opciones = [
-            {'periodo': periodo, 'total': grupos_todos[periodo.id]['total']}
-            for periodo in periodos
-        ]
-
-        visibles = self.filtrar(proyectos, filtro, busqueda)
-        grupos = [self._grupo(periodo, visibles) for periodo in periodos]
-        if periodo_seleccionado:
+        proyectos = self.listar_proyectos(periodo_seleccionado, busqueda)
+        todos = self.listar_proyectos(None, '')
+        periodos = self.periodos_disponibles()
+        grupos = self.agrupar_por_periodo(proyectos, periodos)
+        if periodo_seleccionado is not None:
             grupos = [
                 grupo
                 for grupo in grupos
                 if grupo['periodo'] == periodo_seleccionado
             ]
 
+        opciones = [
+            {'periodo': periodo, 'total': self._total(todos, periodo)}
+            for periodo in periodos
+        ]
+
         return render(
             request,
             self.template_name,
             {
-                'proyectos': visibles,
+                'proyectos': proyectos,
                 'grupos': grupos,
                 'periodos': periodos,
                 'opciones': opciones,
                 'periodo_seleccionado': periodo_seleccionado,
-                'proyecto_seleccionado': self.seleccionar(request, visibles),
-                'hay_proyectos': self.hay_proyectos(proyectos),
-                'total_proyectos': len(proyectos),
-                'filtro': filtro,
+                'proyecto_seleccionado': self.seleccionar(request, proyectos),
+                'hay_proyectos': bool(todos),
+                'total_proyectos': len(todos),
                 'busqueda': busqueda,
-                'conteos': conteos,
             },
         )
 
-    def hay_proyectos(self, proyectos):
-        return bool(proyectos)
+    # --- Métodos del diseño (hu7_clases / hu6_clases) -------------------
 
-    def contar_por_periodo(self, proyectos):
-        conteos = {
-            'todos': len(proyectos),
-            'activos': 0,
-            'planificacion': 0,
-            'cerrados': 0,
-        }
-        for proyecto in proyectos:
-            if proyecto.periodo_actual == Periodo.ACTIVO:
-                conteos['activos'] += 1
-            elif proyecto.periodo_actual == Periodo.FUTURO:
-                conteos['planificacion'] += 1
-            elif proyecto.periodo_actual == Periodo.TERMINADO:
-                conteos['cerrados'] += 1
-        return conteos
-
-    def filtrar(self, proyectos, filtro, busqueda):
-        estado = self.filtros[filtro]
-        visibles = proyectos
+    def listar_proyectos(self, periodo=None, busqueda=''):
+        """Proyectos del periodo indicado, ordenados por fecha de inicio."""
+        consulta = Proyecto.objects.prefetch_related(
+            'equipo__persona', 'seguimientos_tecnicas'
+        )
         if busqueda:
-            termino = busqueda.lower()
-            visibles = [
+            consulta = consulta.filter(nombre__icontains=busqueda)
+        proyectos = list(consulta.order_by('-fecha_inicio', 'nombre'))
+        for proyecto in proyectos:
+            proyecto.periodo_actual = proyecto.periodo()
+            proyecto.salud_actual = proyecto.indice_salud()
+        if periodo is not None:
+            proyectos = [
                 proyecto
-                for proyecto in visibles
-                if termino in proyecto.nombre.lower()
+                for proyecto in proyectos
+                if proyecto.esta_en_periodo(periodo.nombre)
             ]
-        if estado:
-            visibles = [
+        return proyectos
+
+    def periodos_disponibles(self):
+        """Los tres periodos, del más reciente al más antiguo."""
+        maxima = {}
+        for fecha, nombre in (
+            (proyecto.fecha_inicio, proyecto.periodo())
+            for proyecto in Proyecto.objects.only('fecha_inicio')
+        ):
+            if nombre not in maxima or fecha > maxima[nombre]:
+                maxima[nombre] = fecha
+
+        periodos = [Periodo(nombre) for nombre in Periodo.ESTADOS]
+        periodos.sort(
+            key=lambda periodo: (
+                maxima.get(periodo.nombre) is not None,
+                maxima.get(periodo.nombre) or date.min,
+            ),
+            reverse=True,
+        )
+        return periodos
+
+    def agrupar_por_periodo(self, proyectos, periodos=None):
+        """Siempre los tres grupos, con su lista vacía si no hay proyectos."""
+        periodos = periodos if periodos is not None else self.periodos_disponibles()
+        grupos = []
+        for periodo in periodos:
+            del_periodo = [
                 proyecto
-                for proyecto in visibles
-                if proyecto.periodo_actual == estado
+                for proyecto in proyectos
+                if proyecto.periodo_actual == periodo.nombre
             ]
-        return visibles
+            grupos.append(
+                {
+                    'periodo': periodo,
+                    'proyectos': del_periodo,
+                    'total': len(del_periodo),
+                }
+            )
+        return grupos
 
     def seleccionar(self, request, proyectos):
+        """Proyecto del panel de previsualización, sin salir de la lista."""
         seleccionado_id = request.GET.get('seleccionado')
         if seleccionado_id:
             for proyecto in proyectos:
@@ -171,6 +165,7 @@ class ListaProyectosView(View):
             proyecto.salud_actual = proyecto.indice_salud()
             seleccionar_proyecto(request, proyecto)
             return proyecto
+
         seleccionado_sesion = request.session.get(SESSION_KEY)
         if seleccionado_sesion:
             for proyecto in proyectos:
@@ -178,17 +173,30 @@ class ListaProyectosView(View):
                     return proyecto
         return proyectos[0] if proyectos else None
 
-    def _grupo(self, periodo, proyectos):
-        del_periodo = [
-            proyecto
+    def ir_a_crear(self):
+        return redirect('reportes:crear')
+
+    def ir_a_editar(self, proyecto):
+        return redirect('reportes:editar', proyecto_id=proyecto.pk)
+
+    def ir_a_tablero(self, proyecto):
+        return redirect('reportes:tablero', proyecto_id=proyecto.pk)
+
+    # --- Auxiliares -----------------------------------------------------
+
+    def _proyecto_de(self, request):
+        proyecto_id = request.GET.get('proyecto')
+        if not proyecto_id:
+            return None
+        return Proyecto.objects.filter(pk=proyecto_id).first()
+
+    @staticmethod
+    def _total(proyectos, periodo):
+        return sum(
+            1
             for proyecto in proyectos
             if proyecto.periodo_actual == periodo.nombre
-        ]
-        return {
-            'periodo': periodo,
-            'proyectos': del_periodo,
-            'total': len(del_periodo),
-        }
+        )
 
 
 class CrearProyectoView(View):
@@ -257,16 +265,7 @@ class EditarProyectoView(View):
     def get(self, request: HttpRequest, proyecto_id: int) -> HttpResponse:
         proyecto = get_object_or_404(Proyecto, pk=proyecto_id)
         seleccionar_proyecto(request, proyecto)
-        return render(
-            request,
-            self.template_name,
-            {
-                'modo': 'editar',
-                'proyecto': proyecto,
-                'proyecto_form': ProyectoForm(instance=proyecto),
-                'miembros': proyecto.miembros_todos(),
-            },
-        )
+        return self._renderizar(request, proyecto, ProyectoForm(instance=proyecto))
 
     def post(self, request: HttpRequest, proyecto_id: int) -> HttpResponse:
         proyecto = get_object_or_404(Proyecto, pk=proyecto_id)
@@ -288,14 +287,7 @@ class EditarProyectoView(View):
 
         return redirect('reportes:editar_equipo', proyecto_id=proyecto.pk)
 
-    def guardar_proyecto(self, request, proyecto):
-        proyecto_form = ProyectoForm(request.POST, instance=proyecto)
-        if proyecto_form.is_valid():
-            proyecto_form.save()
-            messages.success(request, 'Datos del proyecto actualizados.')
-            return redirect(
-                'reportes:editar_equipo', proyecto_id=proyecto.pk
-            )
+    def _renderizar(self, request, proyecto, proyecto_form):
         return render(
             request,
             self.template_name,
@@ -306,6 +298,16 @@ class EditarProyectoView(View):
                 'miembros': proyecto.miembros_todos(),
             },
         )
+
+    def guardar_proyecto(self, request, proyecto):
+        proyecto_form = ProyectoForm(request.POST, instance=proyecto)
+        if proyecto_form.is_valid():
+            proyecto_form.save()
+            messages.success(request, 'Datos del proyecto actualizados.')
+            return redirect(
+                'reportes:editar_equipo', proyecto_id=proyecto.pk
+            )
+        return self._renderizar(request, proyecto, proyecto_form)
 
     def agregar_miembro(self, request, proyecto):
         nombre = (request.POST.get('persona_nombre') or '').strip()
@@ -360,17 +362,42 @@ class EliminarProyectoView(View):
         return redirect('reportes:lista')
 
 
+def resumen_metricas(proyecto, aplicado):
+    """Filas de métricas aplicadas con su último valor y estado."""
+    if aplicado is None:
+        return []
+    filas = []
+    for instantanea in aplicado.metricas_aplicadas():
+        metrica = instantanea.metrica
+        ultima = metrica.ultima_revision(proyecto)
+        filas.append(
+            {
+                'instantanea': instantanea,
+                'metrica': metrica,
+                'ultima': ultima,
+                'valor': ultima.valor if ultima is not None else None,
+                'aceptada': metrica.esta_aceptada(proyecto),
+                'revisiones': list(metrica.revisiones(proyecto)[:10]),
+            }
+        )
+    return filas
+
+
 class MetricasProyectoView(View):
     template_name = 'reportes/metricas_proyecto.html'
 
     def get(self, request: HttpRequest, proyecto_id: int) -> HttpResponse:
         proyecto = get_object_or_404(Proyecto, pk=proyecto_id)
         seleccionar_proyecto(request, proyecto)
+        aplicado = proyecto.modelo_aplicado_vigente()
+
         return render(
             request,
             self.template_name,
             {
                 'proyecto': proyecto,
+                'aplicado': aplicado,
+                'metricas': resumen_metricas(proyecto, aplicado),
             },
         )
 
@@ -390,6 +417,7 @@ class TableroProyectoView(View):
         tendencia = tendencia_salud(proyecto)
         salud = registro_actual.indice if registro_actual else None
         ultima_actualizacion = tendencia[-1].actualizado if tendencia else None
+        aplicado = proyecto.modelo_aplicado_vigente()
 
         return render(
             request,
@@ -399,6 +427,9 @@ class TableroProyectoView(View):
                 'proyectos': Proyecto.objects.all(),
                 'equipo': proyecto.equipo_activo(),
                 'seguimientos': proyecto.seguimientos_activos(),
+                'aplicado': aplicado,
+                'metricas_aplicadas': resumen_metricas(proyecto, aplicado),
+                'revisiones': proyecto.revisiones()[:10],
                 'salud': salud,
                 'tono_salud': self.tono_salud(salud),
                 'riesgo_salud': self.riesgo_salud(salud),

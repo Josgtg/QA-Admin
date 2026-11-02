@@ -1,8 +1,16 @@
+"""Seed del catálogo base de técnicas QA (HU-04).
+
+Incluye las dos técnicas ya redactadas y **seis con contenido placeholder**
+marcado ``[PENDIENTE]`` hasta que llegue el texto definitivo (deuda H4-1-1,
+§7.4 del plan de refactorización). Con ellas el catálogo cumple el CA1 de HU-04:
+8 técnicas, dos por dimensión, con al menos un paso cada una.
+"""
+
 from django.db import migrations
 
 CATALOGO = {
     'nombre': 'Catálogo base',
-    'descripcion': 'Técnicas de QA de ejemplo para iniciar el seguimiento.',
+    'descripcion': 'Técnicas de QA del catálogo base del proyecto.',
 }
 
 TECNICAS = [
@@ -17,7 +25,8 @@ TECNICAS = [
             'equipo y funciona sin romper funcionalidad existente.'
         ),
         'pregunta_clave': (
-            '¿El código es limpio, sigue las reglas y funciona sin romper nada?'
+            '¿El código es limpio, sigue las reglas y funciona sin romper '
+            'nada?'
         ),
         'dimension': 'DESARROLLO',
         'tipo_control': 'VERIFICACION',
@@ -70,8 +79,18 @@ TECNICAS = [
     },
 ]
 
+# Contenido provisional (deuda H4-1-1): (dimensión visible, valor).
+PLACEHOLDERS = [
+    ('Especificación', 'ESPECIFICACION'),
+    ('Diseño (1)', 'DISENO'),
+    ('Diseño (2)', 'DISENO'),
+    ('Desarrollo', 'DESARROLLO'),
+    ('Conformidad (1)', 'CONFORMIDAD'),
+    ('Conformidad (2)', 'CONFORMIDAD'),
+]
 
-def crear_tecnicas_ejemplo(apps, schema_editor):
+
+def crear_tecnicas_base(apps, schema_editor):
     CatalogoTQA = apps.get_model('tecnicas', 'CatalogoTQA')
     TecnicaQA = apps.get_model('tecnicas', 'TecnicaQA')
     Paso = apps.get_model('tecnicas', 'Paso')
@@ -106,29 +125,40 @@ def crear_tecnicas_ejemplo(apps, schema_editor):
                 },
             )
 
-
-def borrar_tecnicas_ejemplo(apps, schema_editor):
-    CatalogoTQA = apps.get_model('tecnicas', 'CatalogoTQA')
-    TecnicaQA = apps.get_model('tecnicas', 'TecnicaQA')
-
-    TecnicaQA.objects.filter(
-        nombre__in=[tecnica['nombre'] for tecnica in TECNICAS]
-    ).delete()
-    CatalogoTQA.objects.filter(
-        nombre=CATALOGO['nombre'],
-        tecnicas__isnull=True,
-    ).delete()
+    for etiqueta, dimension in PLACEHOLDERS:
+        tecnica, _ = TecnicaQA.objects.get_or_create(
+            nombre=f'Técnica por definir · {etiqueta}',
+            defaults={
+                'descripcion': '[PENDIENTE] Contenido por definir.',
+                'objetivo': '[PENDIENTE] Contenido por definir.',
+                'pregunta_clave': '[PENDIENTE] Contenido por definir.',
+                'dimension': dimension,
+                'tipo_control': 'VERIFICACION',
+                'catalogo': catalogo,
+            },
+        )
+        Paso.objects.get_or_create(
+            tecnica=tecnica,
+            orden=1,
+            defaults={
+                'instruccion': (
+                    '[PENDIENTE] Definir los pasos de esta técnica.'
+                ),
+                'evidencia_esperada': (
+                    '[PENDIENTE] Definir la evidencia esperada.'
+                ),
+            },
+        )
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('tecnicas', '0003_proyecto_fechas'),
+        ('tecnicas', '0001_initial'),
     ]
 
     operations = [
         migrations.RunPython(
-            crear_tecnicas_ejemplo,
-            borrar_tecnicas_ejemplo,
+            crear_tecnicas_base,
+            migrations.RunPython.noop,
         ),
     ]

@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+
+{% block title %}Evidencia del paso · {{ proyecto.nombre }} · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <a class="back-link" href="{% url 'tecnicas:seguimiento' %}?proyecto={{ proyecto.pk }}">
+            <svg class="icon icon-xs"><use href="#i-arrow-left"></use></svg>
+            Volver al seguimiento
+        </a>
+        <h2>Registrar evidencia del paso</h2>
+        <p class="subtitle">
+            {{ proyecto.nombre }} · {{ seguimiento.tecnica.nombre }} ·
+            paso {{ paso.paso.orden }}
+        </p>
+    </div>
+</div>
+
+{% if messages %}
+<div class="flash-stack">
+    {% for message in messages %}
+    <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="detail-grid">
+    <section class="card">
+        <div class="card-head">
+            <h3>Qué se espera</h3>
+        </div>
+        <dl class="detail-list">
+            <dt>Instrucción</dt>
+            <dd>{{ paso.paso.instruccion }}</dd>
+            <dt>Evidencia esperada</dt>
+            <dd>{{ paso.paso.evidencia_esperada|default:"Sin definir" }}</dd>
+            <dt>Estado</dt>
+            <dd>
+                {% if paso.completado %}
+                <span class="status green">Completado</span>
+                {% else %}
+                <span class="status gray">Pendiente</span>
+                {% endif %}
+            </dd>
+        </dl>
+    </section>
+
+    <section class="card">
+        <div class="card-head">
+            <h3>Evidencia</h3>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" novalidate>
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="flash flash-error">{{ form.non_field_errors|striptags }}</div>
+            {% endif %}
+
+            <div class="form-grid">
+                <div class="field field-wide">
+                    <label for="{{ form.enlace.id_for_label }}">
+                        {{ form.enlace.label }}
+                    </label>
+                    {{ form.enlace }}
+                    {% if form.enlace.errors %}
+                    <div class="field-error">{{ form.enlace.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field field-wide">
+                    <label for="{{ form.archivo.id_for_label }}">
+                        {{ form.archivo.label }}
+                    </label>
+                    {{ form.archivo }}
+                    <p class="field-hint">Adjunta un enlace o un archivo.</p>
+                    {% if form.archivo.errors %}
+                    <div class="field-error">{{ form.archivo.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field field-wide">
+                    <label for="{{ form.comentario.id_for_label }}">
+                        {{ form.comentario.label }}
+                    </label>
+                    {{ form.comentario }}
+                    {% if form.comentario.errors %}
+                    <div class="field-error">{{ form.comentario.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field field-wide">
+                    <label for="{{ form.miembro_proyecto.id_for_label }}">
+                        {{ form.miembro_proyecto.label }} <span class="field-required">*</span>
+                    </label>
+                    {{ form.miembro_proyecto }}
+                    {% if form.miembro_proyecto.errors %}
+                    <div class="field-error">{{ form.miembro_proyecto.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="detail-actions">
+                <button class="btn btn-primary" type="submit">
+                    Guardar evidencia y completar paso
+                </button>
+                <a class="btn btn-outline"
+                   href="{% url 'tecnicas:seguimiento' %}?proyecto={{ proyecto.pk }}">
+                    Cancelar
+                </a>
+            </div>
+        </form>
+    </section>
+</div>
+{% endblock %}

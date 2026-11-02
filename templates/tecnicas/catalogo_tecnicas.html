@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+
+{% block title %}Catálogo de técnicas · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h2>Catálogo de Técnicas QA</h2>
+        <p class="subtitle">
+            Ocho técnicas base, dos por dimensión. Marca las que aplicará el
+            proyecto{% if proyecto %} <strong>{{ proyecto.nombre }}</strong>{% endif %}.
+        </p>
+    </div>
+    <div class="actions">
+        <a class="btn btn-outline" href="{% url 'tecnicas:seguimiento' %}">
+            <svg class="icon icon-sm"><use href="#i-list-check"></use></svg>
+            Ir al seguimiento
+        </a>
+        <a class="btn btn-outline" href="{% url 'reportes:lista' %}">
+            Ver proyectos
+        </a>
+    </div>
+</div>
+
+{% if messages %}
+<div class="flash-stack">
+    {% for message in messages %}
+    <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if sin_proyecto %}
+<div class="notice notice-warning">
+    <svg class="icon"><use href="#i-alert-circle"></use></svg>
+    <p>
+        No hay proyectos registrados, así que el catálogo está en modo
+        consulta. <a class="link" href="{% url 'reportes:crear' %}">Crea un proyecto</a>
+        para poder seleccionar técnicas.
+    </p>
+</div>
+{% endif %}
+
+<div class="filter-row">
+    <span class="filter-label">Filtrar por dimensión:</span>
+    <a class="chip {% if not dimension_seleccionada %}active{% endif %}"
+       href="{% url 'tecnicas:catalogo' %}">Todas</a>
+    {% for valor, etiqueta in dimensiones %}
+    <a class="chip {% if dimension_seleccionada == valor %}active{% endif %}"
+       href="{% url 'tecnicas:catalogo' %}?dimension={{ valor }}">
+        {{ etiqueta }}
+    </a>
+    {% endfor %}
+</div>
+
+<form method="post" action="{% url 'tecnicas:catalogo' %}" id="catalogo-form">
+    {% csrf_token %}
+    {% if proyecto %}
+    <input type="hidden" name="proyecto_id" value="{{ proyecto.pk }}">
+    {% endif %}
+
+    <div class="detail-grid">
+        {% for tecnica in tecnicas %}
+        {% include 'tecnicas/_tarjeta_tecnica.html' with tecnica=tecnica %}
+        {% empty %}
+        <section class="card empty-state">
+            <svg class="icon empty-icon"><use href="#i-techniques"></use></svg>
+            <h3>No hay técnicas en esta dimensión</h3>
+            <p>Prueba con otra dimensión o quita el filtro.</p>
+        </section>
+        {% endfor %}
+    </div>
+
+    {% if proyecto %}
+    <div class="detail-actions section-gap">
+        <button class="btn btn-primary" type="submit">
+            Guardar selección de técnicas
+        </button>
+    </div>
+    {% endif %}
+</form>
+{% endblock %}

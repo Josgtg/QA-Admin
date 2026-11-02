@@ -1,7 +1,7 @@
 from django import forms
 from django.core.exceptions import ValidationError
 
-from apps.tecnicas.models import Proyecto
+from .models import Proyecto
 
 
 class ProyectoForm(forms.ModelForm):

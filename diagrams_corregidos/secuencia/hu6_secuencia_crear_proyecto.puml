@@ -63,7 +63,7 @@ end
 CrearView --> QA: Redirect · ListaProyectosView.get()
 deactivate CrearView
 
-note over of CrearView
+note over CrearView
   CrearProyectoView comparte ProyectoFormTemplate
   con EditarProyectoView. La diferencia es que
   aquí no hay desactivación: todos los miembros

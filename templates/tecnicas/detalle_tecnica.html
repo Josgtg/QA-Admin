@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ tecnica.nombre }} · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <a class="back-link" href="{% url 'tecnicas:catalogo' %}">
+            <svg class="icon icon-xs"><use href="#i-arrow-left"></use></svg>
+            Volver al catálogo
+        </a>
+        <h2>{{ tecnica.nombre }}</h2>
+        <p class="subtitle">
+            {{ tecnica.get_dimension_display }} ·
+            {{ tecnica.get_tipo_control_display }}
+            {% if tecnica.es_placeholder %}
+            · <span class="status gray">Contenido pendiente de definir</span>
+            {% endif %}
+        </p>
+    </div>
+    <div class="actions">
+        <a class="btn btn-outline" href="{% url 'tecnicas:seguimiento' %}">
+            <svg class="icon icon-sm"><use href="#i-list-check"></use></svg>
+            Seguimiento
+        </a>
+    </div>
+</div>
+
+<div class="detail-grid">
+    <section class="card">
+        <div class="card-head">
+            <h3>Objetivo</h3>
+        </div>
+        <p>{{ tecnica.objetivo }}</p>
+        <div class="card-head section-gap">
+            <h3>Pregunta clave</h3>
+        </div>
+        <p>{{ tecnica.pregunta_clave }}</p>
+    </section>
+
+    <section class="card">
+        <div class="card-head">
+            <h3>Descripción</h3>
+        </div>
+        <p>{{ tecnica.descripcion }}</p>
+        <dl class="detail-list">
+            <dt>Dimensión</dt>
+            <dd>{{ tecnica.get_dimension_display }}</dd>
+            <dt>Tipo de control</dt>
+            <dd>{{ tecnica.get_tipo_control_display }}</dd>
+            <dt>Pasos</dt>
+            <dd>{{ pasos|length }}</dd>
+            {% if seguimiento %}
+            <dt>Estado en el proyecto</dt>
+            <dd>
+                <span class="status green">En seguimiento</span>
+                {{ seguimiento.porcentaje_avance }}% de avance
+            </dd>
+            {% endif %}
+        </dl>
+    </section>
+</div>
+
+<section class="card section-gap">
+    <div class="card-head">
+        <h3>Pasos de la técnica</h3>
+        <span class="head-muted">
+            {{ pasos|length }} paso{{ pasos|length|pluralize:"s" }}
+        </span>
+    </div>
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Instrucción</th>
+                    <th>Evidencia esperada</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for paso in pasos %}
+                <tr>
+                    <td>{{ paso.orden }}</td>
+                    <td><div class="cell-title">{{ paso.instruccion }}</div></td>
+                    <td>{{ paso.evidencia_esperada }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="3">Esta técnica todavía no tiene pasos definidos.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

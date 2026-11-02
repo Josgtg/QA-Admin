@@ -137,21 +137,21 @@
     <div class="layout">
         <aside class="sidebar">
             <nav class="sidebar-nav">
-                <a class="nav-link {% if request.resolver_match.url_name == 'tablero' %}active{% endif %}" href="{% url 'inicio' %}">
+                <a class="nav-link {% if nav_activo == 'dashboard' %}active{% endif %}" href="{% url 'inicio' %}">
                     <svg class="icon"><use href="#i-dashboard"></use></svg>
                     <span>Dashboard Principal</span>
                 </a>
-                <a class="nav-link {% if request.resolver_match.app_name == 'reportes' and request.resolver_match.url_name != 'tablero' %}active{% endif %}" href="{% url 'reportes:lista' %}">
+                <a class="nav-link {% if nav_activo == 'proyectos' %}active{% endif %}" href="{% url 'reportes:lista' %}">
                     <svg class="icon"><use href="#i-projects"></use></svg>
                     <span>Registro de Proyectos</span>
                 </a>
-                <a class="nav-link {% if request.resolver_match.namespace == 'tecnicas' %}active{% endif %}" href="{% url 'tecnicas:seguimiento' %}">
+                <a class="nav-link {% if nav_activo == 'tecnicas' %}active{% endif %}" href="{% url 'tecnicas:seguimiento' %}">
                     <svg class="icon"><use href="#i-techniques"></use></svg>
                     <span>Gestión de Técnicas QA</span>
                 </a>
-                <a class="nav-link {% if request.resolver_match.namespace == 'modelos' %}active{% endif %}" href="{% url 'modelos:catalogo' %}">
+                <a class="nav-link {% if nav_activo == 'modelos' %}active{% endif %}" href="{% url 'modelos:modelo_proyecto' %}">
                     <svg class="icon"><use href="#i-layers"></use></svg>
-                    <span>Catálogo de Modelos</span>
+                    <span>Modelos de Calidad</span>
                 </a>
             </nav>
         </aside>

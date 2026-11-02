@@ -1,0 +1,64 @@
+{% comment %}
+Historial de revisiones de una métrica (HU-01).
+
+Se incluye desde la pantalla de registro y desde el índice de métricas.
+{% endcomment %}
+<section class="card section-gap">
+    <div class="card-head">
+        <h3>Historial de {{ metrica.nombre }}</h3>
+        <span class="head-muted">
+            {{ historial|length }} revisión{{ historial|length|pluralize:"es" }}
+        </span>
+    </div>
+
+    {% if historial %}
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Valor</th>
+                    <th>Estado</th>
+                    <th>Evidencia</th>
+                    <th>Autor</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for revision in historial %}
+                <tr>
+                    <td>{{ revision.fecha|date:"d/m/Y" }}</td>
+                    <td>
+                        <div class="cell-title">
+                            {{ revision.valor|floatformat:'-2' }} {{ metrica.unidad }}
+                        </div>
+                    </td>
+                    <td>
+                        {% if revision.cumple %}
+                        <span class="status green">Cumplió</span>
+                        {% else %}
+                        <span class="status gray">No cumplió</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if revision.enlace %}
+                        <a class="link" href="{{ revision.enlace }}" target="_blank" rel="noopener">
+                            Ver enlace
+                        </a>
+                        {% elif revision.archivo %}
+                        <a class="link" href="{{ revision.archivo.url }}" target="_blank" rel="noopener">
+                            Ver archivo
+                        </a>
+                        {% else %}
+                        <span class="muted">Sin evidencia</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ revision.miembro_proyecto.persona.nombre }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-row">Todavía no hay mediciones de esta métrica.</div>
+    {% endif %}
+</section>

@@ -72,7 +72,8 @@ Rutas disponibles:
 | `/admin/` | Administración de Django |
 | `/demo/` | Demo de la interfaz visual |
 | `/tecnicas/seguimiento/` | Selección de técnicas QA por proyecto (HU-05) |
-| `/modelos/` | Catálogo de modelos de calidad predefinidos (HU-03) |
+| `/modelos/proyecto/` | Modelo de calidad del proyecto activo: abre el ítem «Modelos de Calidad» del menú lateral (HU-02) |
+| `/modelos/` | Catálogo de modelos de calidad predefinidos (HU-03), desde el botón «Ver catálogo de modelos» |
 | `/` | Proyectos agrupados y filtrados por periodo (HU-07) |
 | `/crear/` | Registro de un nuevo proyecto (HU-07) |
 

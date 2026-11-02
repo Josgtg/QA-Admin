@@ -62,10 +62,7 @@ alt valor fuera de [valor_min, valor_max]
     View --> Template: HttpResponse (400, error de rango)
     Template --> Encargado: corrige el valor
 else sin enlace ni archivo
-    View -> Snapshot: tiene_evidencia()
-    activate Snapshot
-    Snapshot --> View: ok: boolean
-    deactivate Snapshot
+    View -> View: tiene_evidencia(enlace, archivo)
     alt no tiene enlace ni archivo
         View --> Template: HttpResponse (400, evidencia requerida)
         Template --> Encargado: adjunta enlace o archivo

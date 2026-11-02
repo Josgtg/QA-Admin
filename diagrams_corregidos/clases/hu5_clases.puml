@@ -122,8 +122,9 @@ SeguirTecnicaView ..> SeguimientoTecnica : crea / desactiva
 
 note right of SeguimientoTecnica
   La app tecnicas referencia a reportes.Proyecto
-  y reportes.MiembroProyecto; reportes no
-  referencia a tecnicas. Quitar una técnica la
+  y reportes.MiembroProyecto; reportes solo
+  referencia a tecnicas en Proyecto.seguimientos()
+  (accessor inverso). Quitar una técnica la
   desactiva (activa = False) y conserva sus
   evidencias. Las evidencias se alcanzan a través
   de sus SeguimientoPaso.

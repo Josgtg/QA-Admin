@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 
 class TipoUmbral(models.TextChoices):
@@ -8,6 +9,12 @@ class TipoUmbral(models.TextChoices):
 
 
 class ModeloCalidad(models.Model):
+    """Catálogo de modelos de calidad (``hu3_clases.puml``).
+
+    Las características del modelo **se infieren** de sus métricas: no hay FK
+    directa de ``Caracteristica`` a ``ModeloCalidad``.
+    """
+
     nombre = models.CharField(max_length=200, unique=True)
     descripcion = models.TextField()
     predefinido = models.BooleanField(default=False)
@@ -23,44 +30,161 @@ class ModeloCalidad(models.Model):
     @classmethod
     def obtener_predefinidos(cls):
         return cls.objects.filter(predefinido=True).prefetch_related(
-            'caracteristicas__metricas'
+            'modelo_metricas__metrica__caracteristica'
         )
 
+    def obtener_modelo_metricas(self):
+        return self.modelo_metricas.select_related(
+            'metrica__caracteristica'
+        ).order_by('metrica__caracteristica__nombre', 'metrica__nombre')
+
     def obtener_caracteristicas(self):
-        return self.caracteristicas.all()
+        return Caracteristica.objects.filter(
+            metricas__modelo_metricas__modelo_calidad=self
+        ).distinct()
+
+    def tiene_metricas(self):
+        return self.modelo_metricas.exists()
 
 
 class Caracteristica(models.Model):
-    modelo = models.ForeignKey(
-        ModeloCalidad,
-        on_delete=models.CASCADE,
-        related_name='caracteristicas',
-    )
-    nombre = models.CharField(max_length=200)
+    """Catálogo global de características de calidad.
+
+    Agrupa métricas (``1:N``). No pertenece a ningún modelo: un modelo incluye
+    métricas mediante ``ModeloMetrica``.
+    """
+
+    nombre = models.CharField(max_length=200, unique=True)
     descripcion = models.TextField(blank=True)
 
     class Meta:
         verbose_name = 'característica'
         verbose_name_plural = 'características'
-        ordering = ['id']
+        ordering = ['nombre']
 
     def __str__(self):
-        return f'{self.modelo} - {self.nombre}'
+        return self.nombre
 
     def obtener_metricas(self):
         return self.metricas.all()
 
+    def metricas_aplicadas(self, proyecto):
+        """Métricas de la característica activas en el modelo vigente."""
+        return MetricaAplicada.objects.filter(
+            metrica__caracteristica=self,
+            modelo_aplicado__proyecto=proyecto,
+            modelo_aplicado__vigente=True,
+            activa=True,
+        ).select_related('metrica')
+
+    def metricas_aceptadas(self, proyecto):
+        return sum(
+            1
+            for aplicada in self.metricas_aplicadas(proyecto)
+            if aplicada.metrica.esta_aceptada(proyecto)
+        )
+
+    def calcular_seguimiento(self, proyecto):
+        """Aceptadas / activas de la característica en el modelo vigente * 100."""
+        aplicadas = list(self.metricas_aplicadas(proyecto))
+        total = len(aplicadas)
+        if not total:
+            return None
+        aceptadas = sum(
+            1
+            for aplicada in aplicadas
+            if aplicada.metrica.esta_aceptada(proyecto)
+        )
+        return round(aceptadas / total * 100, 2)
+
 
 class Metrica(models.Model):
+    """Métrica de calidad con su rango admisible (``hu1_clases.puml``).
+
+    La meta o umbral **no** vive aquí: vive en ``ModeloMetrica`` (y en su
+    instantánea ``MetricaAplicada``), porque un mismo ``Metrica`` puede tener
+    umbrales distintos en modelos distintos.
+    """
+
     caracteristica = models.ForeignKey(
         Caracteristica,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='metricas',
     )
     nombre = models.CharField(max_length=200)
     descripcion = models.TextField(blank=True)
     unidad = models.CharField(max_length=50)
-    meta = models.FloatField(null=True, blank=True)
+    valor_min = models.FloatField(null=True, blank=True)
+    valor_max = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'métrica'
+        verbose_name_plural = 'métricas'
+        ordering = ['caracteristica__nombre', 'nombre']
+
+    def __str__(self):
+        return self.nombre
+
+    def validar_rango(self, valor):
+        """Valida el valor contra ``valor_min``/``valor_max``.
+
+        Con ambos límites en ``NULL`` el rango no se valida y el valor se
+        acepta (H3-1).
+        """
+        if valor is None:
+            return False
+        if self.valor_min is not None and valor < self.valor_min:
+            return False
+        if self.valor_max is not None and valor > self.valor_max:
+            return False
+        return True
+
+    def revisiones(self, proyecto):
+        """Revisiones de la métrica en **todas** las aplicaciones del proyecto."""
+        return RevisionMetrica.objects.filter(
+            metrica_aplicada__metrica=self,
+            metrica_aplicada__modelo_aplicado__proyecto=proyecto,
+        ).select_related('metrica_aplicada', 'miembro_proyecto__persona')
+
+    def ultima_revision(self, proyecto):
+        return self.revisiones(proyecto).order_by('-fecha', '-pk').first()
+
+    def ultimo_valor(self, proyecto):
+        revision = self.ultima_revision(proyecto)
+        return revision.valor if revision is not None else None
+
+    def instantanea_vigente(self, proyecto):
+        return MetricaAplicada.objects.filter(
+            metrica=self,
+            modelo_aplicado__proyecto=proyecto,
+            modelo_aplicado__vigente=True,
+        ).first()
+
+    def esta_aceptada(self, proyecto):
+        """Reevalúa el último valor con el umbral de la instantánea vigente."""
+        instantanea = self.instantanea_vigente(proyecto)
+        if instantanea is None:
+            return False
+        valor = self.ultimo_valor(proyecto)
+        if valor is None:
+            return False
+        return instantanea.evaluar_cumplimiento(valor)
+
+
+class ModeloMetrica(models.Model):
+    """Configuración de una métrica dentro de un modelo de calidad."""
+
+    modelo_calidad = models.ForeignKey(
+        ModeloCalidad,
+        on_delete=models.CASCADE,
+        related_name='modelo_metricas',
+    )
+    metrica = models.ForeignKey(
+        Metrica,
+        on_delete=models.PROTECT,
+        related_name='modelo_metricas',
+    )
+    umbral = models.FloatField()
     tipo_umbral = models.CharField(
         max_length=10,
         choices=TipoUmbral.choices,
@@ -69,20 +193,241 @@ class Metrica(models.Model):
     activa = models.BooleanField(default=True)
 
     class Meta:
-        verbose_name = 'métrica'
-        verbose_name_plural = 'métricas'
-        ordering = ['id']
+        verbose_name = 'métrica de modelo'
+        verbose_name_plural = 'métricas de modelo'
+        ordering = ['metrica__caracteristica__nombre', 'metrica__nombre']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['modelo_calidad', 'metrica'],
+                name='modelo_metrica_unica_por_modelo',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(tipo_umbral__in=['MINIMO', 'MAXIMO']),
+                name='modelo_metrica_tipo_umbral_valido',
+            ),
+        ]
 
     def __str__(self):
-        return self.nombre
+        return f'{self.modelo_calidad} · {self.metrica}'
+
+    def evaluar_cumplimiento(self, valor):
+        if valor is None:
+            return False
+        if self.tipo_umbral == TipoUmbral.MINIMO:
+            return valor >= self.umbral
+        return valor <= self.umbral
+
+    def esta_activa(self):
+        return self.activa
+
+
+class ModeloAplicado(models.Model):
+    """Aplicación de un modelo a un proyecto (historial, ``hu2_clases.puml``)."""
+
+    proyecto = models.ForeignKey(
+        'reportes.Proyecto',
+        on_delete=models.CASCADE,
+        related_name='modelos_aplicados',
+    )
+    modelo_calidad = models.ForeignKey(
+        ModeloCalidad,
+        on_delete=models.PROTECT,
+        related_name='aplicaciones',
+    )
+    fecha_aplicacion = models.DateField(default=timezone.localdate)
+    fecha_cierre = models.DateField(null=True, blank=True)
+    vigente = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = 'modelo aplicado'
+        verbose_name_plural = 'modelos aplicados'
+        ordering = ['-fecha_aplicacion', '-pk']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['proyecto'],
+                condition=models.Q(vigente=True),
+                name='modelo_aplicado_vigente_unico_por_proyecto',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(vigente=True, fecha_cierre__isnull=True)
+                    | models.Q(vigente=False, fecha_cierre__isnull=False)
+                ),
+                name='modelo_aplicado_cierre_coherente',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.proyecto} · {self.modelo_calidad}'
+
+    def es_vigente(self):
+        return self.vigente
+
+    def cerrar(self):
+        self.vigente = False
+        self.fecha_cierre = timezone.localdate()
+        self.save(update_fields=['vigente', 'fecha_cierre'])
+
+    def crear_instantanea(self):
+        """Copia cada ``ModeloMetrica`` a una ``MetricaAplicada`` inmutable."""
+        for modelo_metrica in self.modelo_calidad.modelo_metricas.all():
+            MetricaAplicada.objects.update_or_create(
+                modelo_aplicado=self,
+                metrica=modelo_metrica.metrica,
+                defaults={
+                    'umbral': modelo_metrica.umbral,
+                    'tipo_umbral': modelo_metrica.tipo_umbral,
+                    'activa': modelo_metrica.activa,
+                },
+            )
+        return self.metricas_aplicadas()
+
+    def metricas_aplicadas(self):
+        return self.instantaneas.select_related('metrica')
+
+    def metrica_aplicada(self, metrica):
+        return self.instantaneas.filter(metrica=metrica).first()
+
+    def metricas_por_caracteristica(self, caracteristica):
+        return self.instantaneas.filter(
+            metrica__caracteristica=caracteristica
+        ).select_related('metrica')
+
+    def metricas_comunes(self, otro):
+        """Métricas que también están en otra aplicación (identidad estable)."""
+        if otro is None:
+            return Metrica.objects.none()
+        propias = set(self.instantaneas.values_list('metrica_id', flat=True))
+        ajenas = set(otro.instantaneas.values_list('metrica_id', flat=True))
+        return Metrica.objects.filter(pk__in=propias & ajenas)
+
+
+class MetricaAplicada(models.Model):
+    """Instantánea inmutable de ``ModeloMetrica`` al aplicar el modelo."""
+
+    modelo_aplicado = models.ForeignKey(
+        ModeloAplicado,
+        on_delete=models.CASCADE,
+        related_name='instantaneas',
+    )
+    metrica = models.ForeignKey(
+        Metrica,
+        on_delete=models.PROTECT,
+        related_name='aplicaciones',
+    )
+    umbral = models.FloatField()
+    tipo_umbral = models.CharField(
+        max_length=10,
+        choices=TipoUmbral.choices,
+        default=TipoUmbral.MINIMO,
+    )
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = 'métrica aplicada'
+        verbose_name_plural = 'métricas aplicadas'
+        ordering = ['metrica__caracteristica__nombre', 'metrica__nombre']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['modelo_aplicado', 'metrica'],
+                name='metrica_aplicada_unica_por_aplicacion',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(tipo_umbral__in=['MINIMO', 'MAXIMO']),
+                name='metrica_aplicada_tipo_umbral_valido',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.modelo_aplicado} · {self.metrica}'
+
+    def evaluar_cumplimiento(self, valor):
+        if valor is None:
+            return False
+        if self.tipo_umbral == TipoUmbral.MINIMO:
+            return valor >= self.umbral
+        return valor <= self.umbral
+
+    def esta_activa(self):
+        return self.activa
+
+    def revisiones(self):
+        return self.revisiones_metrica.order_by('-fecha', '-pk')
+
+
+class RevisionMetrica(models.Model):
+    """Medición de una métrica aplicada, con evidencia y autor (HU-01)."""
+
+    metrica_aplicada = models.ForeignKey(
+        MetricaAplicada,
+        on_delete=models.CASCADE,
+        related_name='revisiones_metrica',
+    )
+    miembro_proyecto = models.ForeignKey(
+        'reportes.MiembroProyecto',
+        on_delete=models.CASCADE,
+        related_name='revisiones',
+    )
+    valor = models.FloatField()
+    fecha = models.DateField(default=timezone.localdate)
+    enlace = models.URLField(max_length=500, blank=True)
+    archivo = models.FileField(upload_to='evidencias/metricas/', blank=True)
+    cumple = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = 'revisión de métrica'
+        verbose_name_plural = 'revisiones de métricas'
+        ordering = ['-fecha', '-pk']
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(enlace='') | ~models.Q(archivo='')
+                ),
+                name='revision_metrica_con_evidencia',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.metrica_aplicada} · {self.valor}'
 
     def clean(self):
-        if self.activa and self.meta is None:
-            raise ValidationError(
-                {'meta': 'Una métrica activa debe tener una meta.'}
+        errores = {}
+        if self.valor is None:
+            errores['valor'] = 'Indica el valor medido.'
+        if not self.fecha:
+            errores['fecha'] = 'Indica la fecha de la medición.'
+        if not self.tiene_evidencia():
+            errores['enlace'] = (
+                'Adjunta un enlace o un archivo como evidencia.'
             )
 
-    def cumple_meta(self, valor):
-        if self.tipo_umbral == TipoUmbral.MINIMO:
-            return valor >= self.meta
-        return valor <= self.meta
+        if self.valor is not None and self.metrica_aplicada_id:
+            metrica = self.metrica_aplicada.metrica
+            if not metrica.validar_rango(self.valor):
+                errores['valor'] = (
+                    'El valor está fuera del rango admisible de la métrica.'
+                )
+
+        if self.miembro_proyecto_id and self.metrica_aplicada_id:
+            if (
+                self.miembro_proyecto.proyecto_id
+                != self.metrica_aplicada.modelo_aplicado.proyecto_id
+            ):
+                errores['miembro_proyecto'] = (
+                    'El autor debe pertenecer al proyecto de la métrica.'
+                )
+
+        if errores:
+            raise ValidationError(errores)
+
+    def tiene_evidencia(self):
+        return bool(self.enlace or self.archivo)
+
+    def calcular_cumple(self):
+        if self.valor is None or self.metrica_aplicada_id is None:
+            return False
+        return self.metrica_aplicada.evaluar_cumplimiento(self.valor)
+
+    def save(self, *args, **kwargs):
+        self.cumple = self.calcular_cumple()
+        super().save(*args, **kwargs)
