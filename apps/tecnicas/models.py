@@ -124,14 +124,48 @@ class SeguimientoTecnica(models.Model):
     def tiene_evidencias_registradas(self):
         return self.pasos.filter(evidencia__isnull=False).exists()
 
+    def pasos_completados(self):
+        """``SeguimientoPaso`` del seguimiento marcados como completados."""
+        return self.pasos.filter(completado=True)
+
+    def pasos_pendientes(self):
+        """``SeguimientoPaso`` del seguimiento que siguen pendientes."""
+        return self.pasos.filter(completado=False)
+
+    def total_pasos(self):
+        """Cantidad de pasos que desglosa el seguimiento."""
+        return self.pasos.count()
+
     def calcular_avance(self):
-        total = self.pasos.count()
-        completados = self.pasos.filter(completado=True).count()
-        porcentaje = round(completados / total * 100, 2) if total else 0.0
+        """Recalcula el porcentaje y lo persiste si cambió.
+
+        ``calcular_porcentaje_avance()`` no escribe; este método sí, porque
+        HU-05 guarda el avance en ``porcentaje_avance``.
+        """
+        porcentaje = self.calcular_porcentaje_avance()
         if self.porcentaje_avance != porcentaje:
             self.porcentaje_avance = porcentaje
             self.save(update_fields=['porcentaje_avance'])
         return self.porcentaje_avance
+
+    def calcular_porcentaje_avance(self):
+        """Pasos completados entre pasos totales * 100 (HU-11).
+
+        Deriva de los ``SeguimientoPaso`` reales en lugar de leer el valor
+        almacenado, que puede quedar desfasado. No escribe en la base de
+        datos.
+        """
+        total = self.total_pasos()
+        if not total:
+            return 0.0
+        completados = self.pasos_completados().count()
+        return round(completados / total * 100, 2)
+
+    def esta_completada(self):
+        """Técnica cumplida: todos sus pasos están completados (HU-11)."""
+        if not self.total_pasos():
+            return False
+        return not self.pasos_pendientes().exists()
 
     def desactivar(self):
         """Baja lógica: conserva evidencias y pasos."""
@@ -176,9 +210,26 @@ class SeguimientoPaso(models.Model):
         return self.completado
 
     def tiene_evidencia(self):
+        """True si el paso tiene una ``Evidencia`` registrada.
+
+        Comprueba la existencia en la base de datos: es fiable aunque la
+        relación inversa no esté precargada.
+        """
         if not self.pk:
             return False
         return Evidencia.objects.filter(seguimiento_paso_id=self.pk).exists()
+
+    def evidencia_segura(self):
+        """``Evidencia`` del paso si existe; ``None`` si no.
+
+        A diferencia de ``self.evidencia``, no lanza
+        ``RelatedObjectDoesNotExist`` cuando el paso no tiene evidencia. La
+        usan las plantillas, donde capturar la excepción no es posible.
+        """
+        try:
+            return self.evidencia
+        except Evidencia.DoesNotExist:
+            return None
 
     def marcar_completado(self, comentario=''):
         """Marca el paso como completado; exige evidencia registrada."""

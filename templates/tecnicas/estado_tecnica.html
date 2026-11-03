@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% comment %}
+Estado de los pasos de una técnica en el proyecto (HU-11).
+
+Solo lectura: lista pasos completados y pendientes, muestra el porcentaje de
+avance y enlaza la evidencia de cada paso completado.
+{% endcomment %}
+
+{% block title %}{{ tecnica.nombre }} · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <a class="back-link" href="{% url 'tecnicas:seguimiento' %}{% if proyecto %}?proyecto={{ proyecto.pk }}{% endif %}">
+            <svg class="icon icon-xs"><use href="#i-arrow-left"></use></svg>
+            Volver al seguimiento
+        </a>
+        <h2>{{ tecnica.nombre }}</h2>
+        <p class="subtitle">
+            Pasos completados y faltantes
+            {% if proyecto %} · {{ proyecto.nombre }}{% endif %}
+            · {{ tecnica.get_dimension_display }}
+        </p>
+    </div>
+    <div class="actions">
+        {% if proyectos %}
+        <form method="get" action="{% url 'tecnicas:estado' tecnica.pk %}" class="inline-form">
+            <label class="sr-only" for="proyecto-select">Proyecto</label>
+            <select id="proyecto-select" name="proyecto" class="select-input" onchange="this.form.submit()">
+                {% for item in proyectos %}
+                <option value="{{ item.pk }}" {% if proyecto and item.pk == proyecto.pk %}selected{% endif %}>
+                    {{ item.nombre }} · {{ item.periodo }}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+        {% endif %}
+        <a class="btn btn-outline" href="{% url 'tecnicas:detalle' tecnica.pk %}">
+            <svg class="icon icon-sm"><use href="#i-eye"></use></svg>
+            Ver técnica
+        </a>
+    </div>
+</div>
+
+{% if not proyecto %}
+<section class="card empty-state">
+    <svg class="icon empty-icon"><use href="#i-techniques"></use></svg>
+    <h3>No hay un proyecto seleccionado</h3>
+    <p>Registra un proyecto para consultar el avance de sus técnicas.</p>
+    <div class="actions empty-actions">
+        <a class="btn btn-primary" href="{% url 'reportes:crear' %}">
+            <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+            Crear proyecto
+        </a>
+    </div>
+</section>
+{% elif not estado %}
+<section class="card empty-state">
+    <svg class="icon empty-icon"><use href="#i-list-check"></use></svg>
+    <h3>Esta técnica no está en el seguimiento del proyecto</h3>
+    <p>
+        Añade «{{ tecnica.nombre }}» a las técnicas de
+        <strong>{{ proyecto.nombre }}</strong> para poder registrar y
+        consultar el estado de sus pasos.
+    </p>
+    <div class="actions empty-actions">
+        <a class="btn btn-primary" href="{% url 'tecnicas:catalogo' %}">
+            <svg class="icon icon-sm"><use href="#i-list-check"></use></svg>
+            Elegir técnicas
+        </a>
+    </div>
+</section>
+{% else %}
+
+<section class="card section-gap">
+    <div class="card-head">
+        <div>
+            <h3>Avance de la técnica</h3>
+            <p class="muted">
+                {{ estado.conteo_completados }} de {{ estado.total_pasos }}
+                paso{{ estado.total_pasos|pluralize:"s" }} completado{{ estado.conteo_completados|pluralize:"s" }}
+            </p>
+        </div>
+        {% if estado.completa %}
+        <span class="status green">
+            <svg class="icon icon-sm"><use href="#i-check-circle"></use></svg>
+            Cumplida
+        </span>
+        {% elif not estado.sin_pasos %}
+        <span class="status amber">En progreso</span>
+        {% endif %}
+    </div>
+
+    <div class="bar">
+        <span class="fill-green" style="width: {{ estado.porcentaje_avance }}%"></span>
+    </div>
+    <p class="muted">{{ estado.porcentaje_avance }}% de avance</p>
+
+    {% if estado.sin_pasos %}
+    <div class="notice notice-warning">
+        <svg class="icon"><use href="#i-alert-circle"></use></svg>
+        <p>Esta técnica no tiene pasos definidos, así que no puede cumplirse.</p>
+    </div>
+    {% endif %}
+</section>
+
+<section class="card section-gap">
+    <div class="card-head">
+        <h3>Pasos completados</h3>
+        <span class="head-muted">
+            {{ estado.conteo_completados }} paso{{ estado.conteo_completados|pluralize:"s" }}
+        </span>
+    </div>
+    {% for paso in estado.pasos_completados %}
+        {% include 'tecnicas/_estado_paso.html' with paso=paso %}
+    {% empty %}
+    <p class="muted">Todavía no hay pasos completados.</p>
+    {% endfor %}
+</section>
+
+<section class="card section-gap">
+    <div class="card-head">
+        <h3>Pasos pendientes</h3>
+        <span class="head-muted">
+            {{ estado.conteo_pendientes }} paso{{ estado.conteo_pendientes|pluralize:"s" }}
+        </span>
+    </div>
+    {% for paso in estado.pasos_pendientes %}
+        {% include 'tecnicas/_estado_paso.html' with paso=paso %}
+    {% empty %}
+    <p class="muted">No quedan pasos pendientes.</p>
+    {% endfor %}
+</section>
+
+{% if estado.completa %}
+<div class="notice">
+    <svg class="icon"><use href="#i-shield"></use></svg>
+    <p>Todos los pasos están completados: la técnica aparece como cumplida.</p>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

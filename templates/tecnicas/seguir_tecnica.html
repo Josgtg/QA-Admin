@@ -99,18 +99,28 @@
                 <p class="muted">
                     {{ seguimiento.tecnica.get_tipo_control_display }} ·
                     {{ seguimiento.porcentaje_avance }}% de avance
+                    {% if seguimiento.porcentaje_avance >= 100 %}
+                    · <span class="status green">Cumplida</span>
+                    {% endif %}
                 </p>
             </div>
-            <form class="inline-form" method="post">
-                {% csrf_token %}
-                <input type="hidden" name="proyecto_id" value="{{ proyecto.pk }}">
-                <input type="hidden" name="quitar" value="{{ seguimiento.pk }}">
-                <button class="btn btn-outline btn-sm" type="submit"
-                        onclick="return confirm('¿Quitar esta técnica del seguimiento? Sus evidencias se conservan.');">
-                    <svg class="icon icon-sm"><use href="#i-trash"></use></svg>
-                    Quitar
-                </button>
-            </form>
+            <div class="actions">
+                <a class="btn btn-outline btn-sm"
+                   href="{% url 'tecnicas:estado' seguimiento.tecnica.pk %}">
+                    <svg class="icon icon-sm"><use href="#i-list-check"></use></svg>
+                    Ver pasos y avance
+                </a>
+                <form class="inline-form" method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="proyecto_id" value="{{ proyecto.pk }}">
+                    <input type="hidden" name="quitar" value="{{ seguimiento.pk }}">
+                    <button class="btn btn-outline btn-sm" type="submit"
+                            onclick="return confirm('¿Quitar esta técnica del seguimiento? Sus evidencias se conservan.');">
+                        <svg class="icon icon-sm"><use href="#i-trash"></use></svg>
+                        Quitar
+                    </button>
+                </form>
+            </div>
         </div>
 
         <div class="bar">

@@ -6,7 +6,8 @@ from django.urls import reverse
 from django.views import View
 
 from apps.reportes.models import Proyecto
-from apps.tecnicas.models import Dimension, TecnicaQA
+from apps.tecnicas.estado import EstadoTecnica
+from apps.tecnicas.models import Dimension, SeguimientoTecnica, TecnicaQA
 from apps.tecnicas.selection import (
     obtener_proyecto_seleccionado,
     seleccionar_proyecto,
@@ -315,3 +316,79 @@ class RegistrarEvidenciaView(View):
                 'form': form,
             },
         )
+
+
+class EstadoTecnicaView(View):
+    """Pasos completados y faltantes de una técnica en el proyecto (HU-11).
+
+    Solo lectura: muestra el estado de los pasos, el porcentaje de avance y
+    la evidencia de cada paso completado. Registrar evidencia es HU-10.
+    """
+
+    template_name = 'tecnicas/estado_tecnica.html'
+
+    def get(
+        self, request: HttpRequest, tecnica_id: int
+    ) -> HttpResponse:
+        tecnica = get_object_or_404(TecnicaQA, pk=tecnica_id)
+        proyecto = self._proyecto(request)
+        seleccionar_proyecto(request, proyecto)
+
+        estado = self.obtener_estado_tecnica(proyecto, tecnica)
+
+        return render(
+            request,
+            self.template_name,
+            {
+                'tecnica': tecnica,
+                'proyecto': proyecto,
+                'proyectos': Proyecto.objects.all(),
+                'seguimiento': estado.seguimiento if estado else None,
+                'estado': estado,
+                'pasos': estado.pasos if estado else [],
+            },
+        )
+
+    def _proyecto(self, request):
+        """Proyecto a consultar: el de la query (``?proyecto=``) o el activo.
+
+        El parámetro explícito tiene prioridad para que el enlace desde el
+        tablero abra el proyecto correcto; sin él se usa el proyecto
+        seleccionado en la sesión.
+        """
+        proyecto_id = request.GET.get('proyecto')
+        if proyecto_id:
+            return get_object_or_404(Proyecto, pk=proyecto_id)
+        return obtener_proyecto_seleccionado(request)
+
+    def obtener_estado_tecnica(self, proyecto, tecnica):
+        """Construye el DTO con los pasos y el avance de la técnica.
+
+        Devuelve ``None`` cuando el proyecto no sigue la técnica: sin
+        seguimiento no hay pasos que mostrar. Se consideran solo los
+        seguimientos activos, porque una técnica retirada (HU-05) conserva sus
+        pasos pero ya no forma parte del seguimiento del proyecto.
+        """
+        if proyecto is None:
+            return None
+        seguimiento = (
+            SeguimientoTecnica.objects.filter(
+                proyecto=proyecto,
+                tecnica=tecnica,
+                activa=True,
+            )
+            .prefetch_related('pasos__paso', 'pasos__evidencia')
+            .first()
+        )
+        if seguimiento is None:
+            return None
+        return EstadoTecnica(
+            tecnica=tecnica,
+            pasos=seguimiento.pasos.all(),
+            porcentaje_avance=self.calcular_porcentaje_avance(seguimiento),
+            seguimiento=seguimiento,
+        )
+
+    def calcular_porcentaje_avance(self, seguimiento):
+        """Deriva el avance de los pasos; no lo persiste."""
+        return seguimiento.calcular_porcentaje_avance()
