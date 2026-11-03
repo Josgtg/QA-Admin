@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Evidencias · {{ tecnica.nombre }} · QA Admin{% endblock %}
+{% block title %}Evidencia del paso · {{ proyecto.nombre }} · QA Admin{% endblock %}
 
 {% block content %}
 <div class="page-head">
@@ -9,17 +9,11 @@
             <svg class="icon icon-xs"><use href="#i-arrow-left"></use></svg>
             Volver al seguimiento
         </a>
-        <h2>Evidencias de la técnica</h2>
+        <h2>Registrar evidencia del paso</h2>
         <p class="subtitle">
-            {{ proyecto.nombre }} · {{ tecnica.nombre }}
-            <span class="dim-tag {{ dimension_meta.color }}">{{ tecnica.get_dimension_display }}</span>
+            {{ proyecto.nombre }} · {{ seguimiento.tecnica.nombre }} ·
+            paso {{ paso.paso.orden }}
         </p>
-    </div>
-    <div class="actions">
-        <a class="btn" href="{% url 'reportes:tablero' proyecto.pk %}">
-            <svg class="icon icon-sm"><use href="#i-dashboard"></use></svg>
-            Ir al tablero
-        </a>
     </div>
 </div>
 
@@ -31,296 +25,112 @@
 </div>
 {% endif %}
 
-<section class="card progress-card">
-    <div class="progress-card-main">
-        <div>
-            <p class="card-title-center card-title-left">Avance de la técnica</p>
-            <p class="progress-figure">
-                {{ porcentaje }}%<small> de pasos con evidencia</small>
-            </p>
+<div class="detail-grid">
+    <section class="card">
+        <div class="card-head">
+            <h3>Qué se espera</h3>
         </div>
-        <div class="progress-card-bar">
-            <div class="bar">
-                <span class="fill-{{ dimension_meta.color }}" style="width: {{ porcentaje }}%"></span>
-            </div>
-            <p class="progress-caption">
-                {{ completados }} de {{ total_pasos }} paso{{ total_pasos|pluralize:"s" }}
-                completado{{ completados|pluralize:"s" }}
-            </p>
-        </div>
-    </div>
-</section>
-
-<div class="evidence-layout">
-    <div class="steps-stack">
-        {% for paso in pasos %}
-        <article class="card step-card {% if paso.completado %}step-done{% else %}step-pending{% endif %}"
-                 id="paso-{{ paso.pk }}">
-            <div class="step-head">
-                <span class="step-number">{{ paso.paso.orden }}</span>
-                <div class="step-main">
-                    <p class="step-title">{{ paso.paso.instruccion }}</p>
-                    {% if paso.paso.evidencia_esperada %}
-                    <p class="step-expected">
-                        <strong>Evidencia esperada:</strong>
-                        {{ paso.paso.evidencia_esperada }}
-                    </p>
-                    {% endif %}
-                </div>
+        <dl class="detail-list">
+            <dt>Instrucción</dt>
+            <dd>{{ paso.paso.instruccion }}</dd>
+            <dt>Evidencia esperada</dt>
+            <dd>{{ paso.paso.evidencia_esperada|default:"Sin definir" }}</dd>
+            <dt>Estado</dt>
+            <dd>
                 {% if paso.completado %}
-                <span class="badge badge-green">
-                    <svg class="icon icon-xs"><use href="#i-check-circle"></use></svg>
-                    Completado
-                </span>
+                <span class="status green">Completado</span>
                 {% else %}
-                <span class="badge badge-gray">Pendiente</span>
+                <span class="status gray">Pendiente</span>
                 {% endif %}
-            </div>
+            </dd>
+        </dl>
+    </section>
 
-            {% if paso.completado %}
-            {% with evidencia=paso.evidencia_registrada %}
-            {% if evidencia %}
-            <div class="evidence-record">
-                <div class="evidence-meta">
-                    <span>
-                        <svg class="icon icon-xs"><use href="#i-calendar"></use></svg>
-                        {{ evidencia.fecha|date:"d/m/Y" }}
-                    </span>
-                    <span>
-                        <svg class="icon icon-xs"><use href="#i-group"></use></svg>
-                        {{ evidencia.autor }}
-                    </span>
-                    <span>
-                        <svg class="icon icon-xs"><use href="#i-clock"></use></svg>
-                        Registrada el {{ evidencia.fecha_registro|date:"d/m/Y, H:i" }}
-                    </span>
-                </div>
-                <p class="evidence-name">
-                    {% if evidencia.es_archivo %}
-                    <svg class="icon icon-xs"><use href="#i-file"></use></svg>
-                    {% else %}
-                    <svg class="icon icon-xs"><use href="#i-link"></use></svg>
+    <section class="card">
+        <div class="card-head">
+            <h3>Evidencia</h3>
+        </div>
+
+        {% if evidencia %}
+        <div class="flash flash-success">
+            Evidencia del {{ evidencia.fecha|date:"d/m/Y" }} registrada por
+            {{ evidencia.miembro_proyecto.persona.nombre }}.
+            <a class="link"
+               href="{% url 'tecnicas:abrir_evidencia' evidencia.pk %}"
+               target="_blank" rel="noopener">Abrir evidencia</a>
+        </div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data" novalidate>
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="flash flash-error">{{ form.non_field_errors|striptags }}</div>
+            {% endif %}
+
+            <div class="form-grid">
+                <div class="field field-wide">
+                    <label for="{{ form.enlace.id_for_label }}">
+                        {{ form.enlace.label }}
+                    </label>
+                    {{ form.enlace }}
+                    {% if form.enlace.errors %}
+                    <div class="field-error">{{ form.enlace.errors|striptags }}</div>
                     {% endif %}
-                    {{ evidencia.descripcion }}
-                </p>
-                {% if evidencia.comentario %}
-                <p class="evidence-comment">{{ evidencia.comentario }}</p>
-                {% endif %}
-                <a class="evidence-open"
-                   href="{% url 'tecnicas:abrir_evidencia' evidencia.pk %}"
-                   target="_blank"
-                   rel="noopener">
-                    <svg class="icon icon-xs"><use href="#i-eye"></use></svg>
-                    Abrir evidencia
+                </div>
+
+                <div class="field field-wide">
+                    <label for="{{ form.archivo.id_for_label }}">
+                        {{ form.archivo.label }}
+                    </label>
+                    {{ form.archivo }}
+                    <p class="field-hint">{{ form.archivo.help_text }}</p>
+                    {% if form.archivo.errors %}
+                    <div class="field-error">{{ form.archivo.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field field-wide">
+                    <label for="{{ form.fecha.id_for_label }}">
+                        {{ form.fecha.label }}
+                    </label>
+                    {{ form.fecha }}
+                    {% if form.fecha.errors %}
+                    <div class="field-error">{{ form.fecha.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field field-wide">
+                    <label for="{{ form.comentario.id_for_label }}">
+                        {{ form.comentario.label }}
+                    </label>
+                    {{ form.comentario }}
+                    {% if form.comentario.errors %}
+                    <div class="field-error">{{ form.comentario.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field field-wide">
+                    <label for="{{ form.miembro_proyecto.id_for_label }}">
+                        {{ form.miembro_proyecto.label }} <span class="field-required">*</span>
+                    </label>
+                    {{ form.miembro_proyecto }}
+                    {% if form.miembro_proyecto.errors %}
+                    <div class="field-error">{{ form.miembro_proyecto.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="detail-actions">
+                <button class="btn btn-primary" type="submit">
+                    Guardar evidencia y completar paso
+                </button>
+                <a class="btn btn-outline"
+                   href="{% url 'tecnicas:seguimiento' %}?proyecto={{ proyecto.pk }}">
+                    Cancelar
                 </a>
             </div>
-            {% endif %}
-            {% endwith %}
-            <div class="step-footer">
-                <span class="step-foot-note">
-                    Completado el {{ paso.fecha_completado|date:"d/m/Y, H:i" }}
-                </span>
-            </div>
-            {% else %}
-            <div class="step-footer">
-                <span class="step-foot-note">Sin evidencia registrada todavía.</span>
-                <a class="btn btn-sm btn-step"
-                   href="#form-evidencia"
-                   data-paso="{{ paso.pk }}"
-                   data-orden="{{ paso.paso.orden }}">
-                    <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
-                    Registrar evidencia
-                </a>
-            </div>
-            {% endif %}
-        </article>
-        {% empty %}
-        <section class="card empty-state">
-            <svg class="icon empty-icon"><use href="#i-clipboard"></use></svg>
-            <h3>La técnica no tiene pasos definidos</h3>
-            <p>Agrega pasos a la técnica para poder registrar sus evidencias.</p>
-        </section>
-        {% endfor %}
-
-        <section class="card rules-card">
-            <div class="card-head">
-                <h3>Reglas de la evidencia</h3>
-            </div>
-            <ul class="rules-list">
-                <li><strong>Enlace o archivo:</strong> al menos uno es obligatorio.</li>
-                <li><strong>Formatos:</strong> {{ formatos_aceptados }}.</li>
-                <li><strong>Tamaño máximo:</strong> {{ tamano_maximo_mb }} MB.</li>
-                <li><strong>Autor:</strong> se elige del equipo del proyecto.</li>
-                <li><strong>Una evidencia por paso:</strong> al completarlo no se reemplaza.</li>
-            </ul>
-        </section>
-    </div>
-
-    <aside class="evidence-aside">
-        <section class="card evidence-form-card" id="form-evidencia">
-            {% if pasos_pendientes %}
-            <div class="form-card-head">
-                <span class="form-card-icon">
-                    <svg class="icon"><use href="#i-clipboard"></use></svg>
-                </span>
-                <div>
-                    <h3>Registrar evidencia</h3>
-                    <p>El paso queda completado con fecha y autor al guardar.</p>
-                </div>
-            </div>
-
-            <form method="post" enctype="multipart/form-data" novalidate>
-                {% csrf_token %}
-
-                {% if formulario.non_field_errors %}
-                <div class="flash flash-error">
-                    {{ formulario.non_field_errors|striptags }}
-                </div>
-                {% endif %}
-
-                <div class="form-grid form-grid-single">
-                    <div class="field">
-                        <label for="paso-select">Paso</label>
-                        <select id="paso-select" name="paso_id" class="select-input">
-                            {% for paso in pasos_pendientes %}
-                            <option value="{{ paso.pk }}"
-                                    {% if paso.pk == paso_seleccionado %}selected{% endif %}>
-                                {{ paso.paso.orden }}. {{ paso.paso.instruccion|truncatechars:58 }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="field">
-                        <label for="{{ formulario.enlace.id_for_label }}">
-                            {{ formulario.enlace.label }}
-                            <span class="field-optional">(si no adjuntas archivo)</span>
-                        </label>
-                        {{ formulario.enlace }}
-                        {% if formulario.enlace.errors %}
-                        <div class="field-error">{{ formulario.enlace.errors|striptags }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="field">
-                        <label for="{{ formulario.archivo.id_for_label }}">
-                            {{ formulario.archivo.label }}
-                            <span class="field-optional">(si no usas enlace)</span>
-                        </label>
-                        <div class="file-drop">
-                            <label class="file-drop-button"
-                                   for="{{ formulario.archivo.id_for_label }}">
-                                <svg class="icon icon-sm"><use href="#i-upload"></use></svg>
-                                Seleccionar archivo
-                            </label>
-                            <span class="file-drop-name" id="archivo-nombre">
-                                Ningún archivo seleccionado.
-                            </span>
-                            <div class="file-drop-input">{{ formulario.archivo }}</div>
-                        </div>
-                        <p class="field-hint">{{ formulario.archivo.help_text }}</p>
-                        {% if formulario.archivo.errors %}
-                        <div class="field-error">{{ formulario.archivo.errors|striptags }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="field">
-                        <label for="{{ formulario.fecha.id_for_label }}">
-                            {{ formulario.fecha.label }} <span class="field-required">*</span>
-                        </label>
-                        {{ formulario.fecha }}
-                        {% if formulario.fecha.errors %}
-                        <div class="field-error">{{ formulario.fecha.errors|striptags }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="field">
-                        <label for="{{ formulario.autor.id_for_label }}">
-                            {{ formulario.autor.label }} <span class="field-required">*</span>
-                        </label>
-                        {{ formulario.autor }}
-                        <datalist id="autores-proyecto">
-                            {% for autor in autores %}
-                            <option value="{{ autor }}"></option>
-                            {% endfor %}
-                        </datalist>
-                        {% if autores %}
-                        <p class="field-hint">Miembros del equipo del proyecto.</p>
-                        {% else %}
-                        <p class="field-hint">
-                            El proyecto no tiene equipo registrado; escribe el nombre
-                            de quien registra la evidencia.
-                        </p>
-                        {% endif %}
-                        {% if formulario.autor.errors %}
-                        <div class="field-error">{{ formulario.autor.errors|striptags }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="field">
-                        <label for="{{ formulario.comentario.id_for_label }}">
-                            {{ formulario.comentario.label }}
-                        </label>
-                        {{ formulario.comentario }}
-                        {% if formulario.comentario.errors %}
-                        <div class="field-error">{{ formulario.comentario.errors|striptags }}</div>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="form-actions form-actions-stack">
-                    <p class="form-hint">
-                        Un paso no se completa si no tiene enlace o archivo.
-                    </p>
-                    <button class="btn btn-primary" type="submit">
-                        <svg class="icon icon-sm"><use href="#i-check-circle"></use></svg>
-                        Registrar evidencia
-                    </button>
-                </div>
-            </form>
-            {% else %}
-            <div class="empty-state empty-state-sm">
-                <svg class="icon empty-icon"><use href="#i-check-circle"></use></svg>
-                <h3>Todos los pasos tienen evidencia</h3>
-                <p>Puedes abrir cada evidencia desde el paso correspondiente.</p>
-            </div>
-            {% endif %}
-        </section>
-    </aside>
+        </form>
+    </section>
 </div>
-
-<script>
-(function () {
-    const selector = document.getElementById('paso-select');
-    const archivo = document.getElementById('id_archivo');
-    const etiqueta = document.getElementById('archivo-nombre');
-
-    document.querySelectorAll('[data-paso]').forEach(function (boton) {
-        boton.addEventListener('click', function () {
-            if (selector) {
-                selector.value = boton.dataset.paso;
-            }
-            const enlace = document.getElementById('id_enlace');
-            if (enlace) {
-                window.setTimeout(function () {
-                    enlace.focus();
-                }, 220);
-            }
-        });
-    });
-
-    if (!archivo || !etiqueta) {
-        return;
-    }
-
-    archivo.addEventListener('change', function () {
-        const nombre = archivo.files && archivo.files.length
-            ? archivo.files[0].name
-            : '';
-        etiqueta.textContent = nombre
-            ? 'Archivo seleccionado: ' + nombre
-            : 'Ningún archivo seleccionado.';
-    });
-})();
-</script>
 {% endblock %}

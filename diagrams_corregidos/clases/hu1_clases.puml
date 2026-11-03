@@ -1,0 +1,223 @@
+@startuml hu1_clases
+allowmixing
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam nodesep 70
+skinparam ranksep 95
+top to bottom direction
+
+title Clases: evidencia y seguimiento de métricas (HU-01)
+
+actor "Encargado de QA" as Encargado
+
+package "modelos.template" #EEEDFE {
+  class RevisionMetricaTemplate {
+    + abrir(proyecto_id: int, metrica_id: int): void
+    + enviar(): void
+    + cancelar(): void
+  }
+}
+
+package "modelos.view" #EEEDFE {
+  class RegistrarRevisionMetricaView {
+    + get(request: HttpRequest, proyecto_id: int, metrica_id: int): HttpResponse
+    + post(request: HttpRequest, proyecto_id: int, metrica_id: int): HttpResponse
+    + obtener_metrica_aplicada(proyecto: Proyecto, metrica: Metrica): MetricaAplicada
+    + obtener_historial(proyecto: Proyecto, metrica: Metrica): List<RevisionMetrica>
+  }
+}
+
+package "reportes.model" #FAEEDA {
+  class Persona {
+    - id: int
+    - nombre: String
+  }
+
+  class Proyecto {
+    - id: int
+    - nombre: String
+    - fecha_inicio: Date
+    - fecha_fin: Date
+    + periodo(): String
+    + historial_modelos(): List<ModeloAplicado>
+    + modelo_aplicado_vigente(): ModeloAplicado
+    + revisiones(): List<RevisionMetrica>
+    + cambiar_modelo(modelo: ModeloCalidad): ModeloAplicado
+  }
+
+  class MiembroProyecto {
+    - id: int
+    - rol: String
+    - activo: boolean
+    + clean(): void
+  }
+}
+
+package "modelos.model" #EEEDFE {
+  enum TipoUmbral {
+    MINIMO
+    MAXIMO
+  }
+
+  class ModeloCalidad {
+    - id: int
+    - nombre: String
+    - predefinido: boolean
+    + obtener_caracteristicas(): List<Caracteristica>
+    + obtener_modelo_metricas(): List<ModeloMetrica>
+  }
+
+  class Caracteristica {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    + obtener_metricas(): List<Metrica>
+    + metricas_aplicadas(proyecto: Proyecto): List<MetricaAplicada>
+    + metricas_aceptadas(proyecto: Proyecto): int
+    + calcular_seguimiento(proyecto: Proyecto): Float
+  }
+
+  class Metrica {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - unidad: String
+    - valor_min: Float
+    - valor_max: Float
+    + validar_rango(valor: Float): boolean
+    + revisiones(proyecto: Proyecto): List<RevisionMetrica>
+    + ultima_revision(proyecto: Proyecto): RevisionMetrica
+    + ultimo_valor(proyecto: Proyecto): Float
+    + esta_aceptada(proyecto: Proyecto): boolean
+  }
+
+  class ModeloMetrica {
+    - id: int
+    - umbral: Float
+    - tipo_umbral: TipoUmbral
+    - activa: boolean
+    + evaluar_cumplimiento(valor: Float): boolean
+    + esta_activa(): boolean
+  }
+
+  class ModeloAplicado {
+    - id: int
+    - fecha_aplicacion: Date
+    - fecha_cierre: Date
+    - vigente: boolean
+    + es_vigente(): boolean
+    + cerrar(): void
+    + crear_instantanea(): void
+    + metricas_aplicadas(): List<MetricaAplicada>
+    + metrica_aplicada(metrica: Metrica): MetricaAplicada
+    + metricas_por_caracteristica(caracteristica: Caracteristica): List<MetricaAplicada>
+    + metricas_comunes(otro: ModeloAplicado): List<Metrica>
+  }
+
+  class MetricaAplicada {
+    - id: int
+    - umbral: Float
+    - tipo_umbral: TipoUmbral
+    - activa: boolean
+    + evaluar_cumplimiento(valor: Float): boolean
+    + esta_activa(): boolean
+    + revisiones(): List<RevisionMetrica>
+  }
+
+  class RevisionMetrica {
+    - id: int
+    - valor: Float
+    - fecha: Date
+    - enlace: String
+    - archivo: String
+    - cumple: boolean
+    + clean(): void
+    + tiene_evidencia(): boolean
+    + calcular_cumple(): boolean
+  }
+}
+
+Persona "1" --> "0..*" MiembroProyecto : participa como
+Proyecto "1" *-- "0..*" MiembroProyecto : equipo
+
+Proyecto "1" --> "0..*" ModeloAplicado : historial de aplicaciones
+ModeloCalidad "1" --> "0..*" ModeloAplicado : se usa en
+ModeloCalidad "1" --> "0..*" ModeloMetrica : incluye
+Metrica "1" --> "0..*" ModeloMetrica : se configura en
+Caracteristica "1" *-- "0..*" Metrica : agrupa
+
+ModeloAplicado "1" *-- "1..*" MetricaAplicada : instantánea
+Metrica "1" --> "0..*" MetricaAplicada : se aplica como
+
+MetricaAplicada "1" --> "0..*" RevisionMetrica : se mide en
+MiembroProyecto "1" --> "0..*" RevisionMetrica : autor de
+ModeloMetrica --> TipoUmbral
+MetricaAplicada --> TipoUmbral
+
+Encargado ..> RevisionMetricaTemplate : interactúa
+RevisionMetricaTemplate ..> RegistrarRevisionMetricaView : solicitud
+RegistrarRevisionMetricaView ..> Proyecto : consulta
+RegistrarRevisionMetricaView ..> MetricaAplicada : obtiene configuración vigente
+RegistrarRevisionMetricaView ..> RevisionMetrica : registra
+RegistrarRevisionMetricaView ..> Caracteristica : recalcula seguimiento
+RegistrarRevisionMetricaView ..> RevisionMetricaTemplate : renderiza
+
+note bottom of RevisionMetrica
+  Requiere valor, fecha y al menos un enlace o
+  archivo. clean() rechaza campos faltantes y
+  valores fuera de Metrica.valor_min/valor_max.
+  calcular_cumple() usa el umbral y tipo_umbral
+  de la MetricaAplicada; cumple se guarda como
+  resultado histórico de esa medición.
+end note
+
+note bottom of MetricaAplicada
+  Instantánea inmutable de ModeloMetrica al
+  aplicar el modelo. Dirección del umbral:
+  MINIMO exige valor >= umbral;
+  MAXIMO exige valor <= umbral.
+end note
+
+note bottom of ModeloAplicado
+  Historial: varias aplicaciones por proyecto;
+  como máximo una vigente. Al cambiar de modelo
+  se cierra la anterior y se crea una nueva
+  instantánea. No se borran las revisiones.
+end note
+
+note bottom of Metrica
+  ultima_revision(proyecto) y ultimo_valor(proyecto)
+  buscan en todas las MetricaAplicada del proyecto,
+  no solo en la vigente. Así una métrica común
+  conserva su progreso al cambiar de modelo.
+  esta_aceptada(proyecto) reevalúa el último valor
+  con el umbral y tipo_umbral de la instantánea
+  vigente; no reutiliza el cumple histórico si el
+  umbral cambió.
+end note
+
+note bottom of Caracteristica
+  Seguimiento de la característica =
+  (métricas aceptadas en la característica /
+   métricas activas de la característica en el
+   modelo vigente) * 100.
+  Una métrica está aceptada si su última medición
+  del proyecto cumple con la instantánea vigente.
+  Se conserva el valor medido aunque la métrica
+  venga de una aplicación anterior; el cumplimiento
+  se recalcula con el umbral actual.
+end note
+
+note bottom of ModeloCalidad
+  Las características del modelo se infieren de
+  las métricas incluidas en ModeloMetrica. No hay
+  FK directa de Caracteristica a ModeloCalidad.
+end note
+
+note bottom of Proyecto
+  revisiones() recorre ModeloAplicado ->
+  MetricaAplicada -> RevisionMetrica.
+end note
+@enduml

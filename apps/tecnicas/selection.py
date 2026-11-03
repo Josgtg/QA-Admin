@@ -9,7 +9,7 @@ def seleccionar_proyecto(request, proyecto):
 
 
 def obtener_proyecto_seleccionado(request):
-    from .models import Proyecto
+    from apps.reportes.models import Proyecto
 
     proyecto_id = request.session.get(SESSION_KEY)
     if proyecto_id:

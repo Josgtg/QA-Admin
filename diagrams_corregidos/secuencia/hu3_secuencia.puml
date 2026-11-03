@@ -1,0 +1,66 @@
+@startuml
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer"
+  participant "CatalogoModelosTemplate" as UI
+end box
+
+box "View Layer (modelos.view)"
+  participant "CatalogoModelosView" as View
+end box
+
+box "Model Layer (modelos.model)"
+  participant "ModeloCalidad" as Modelos
+  participant "m: ModeloCalidad" as Modelo
+  participant "mm: ModeloMetrica" as ModeloMetrica
+  participant "met: Metrica" as Metrica
+  participant "c: Caracteristica" as Caracteristica
+end box
+
+== Catálogo de modelos de calidad predefinidos (HU-03) ==
+
+Encargado -> UI: Abre el catálogo de modelos de calidad
+UI -> View: get(req: HttpRequest)
+activate View
+
+View -> Modelos: obtener_predefinidos()
+activate Modelos
+Modelos --> View: List<ModeloCalidad>
+deactivate Modelos
+
+loop "por cada ModeloCalidad predefinido"
+    View -> Modelo: obtener_modelo_metricas()
+    activate Modelo
+    Modelo --> View: List<ModeloMetrica>
+    deactivate Modelo
+
+    loop "por cada ModeloMetrica del modelo"
+        View -> ModeloMetrica: metrica
+        activate ModeloMetrica
+        ModeloMetrica --> View: metrica: Metrica
+        deactivate ModeloMetrica
+
+        View -> ModeloMetrica: tipo_umbral
+        ModeloMetrica --> View: tipo: TipoUmbral (MINIMO / MAXIMO)
+
+        View -> Metrica: caracteristica
+        activate Metrica
+        Metrica --> View: c: Caracteristica
+        deactivate Metrica
+
+        View -> Caracteristica: nombre
+        activate Caracteristica
+        Caracteristica --> View: nombre_caracteristica: String
+        deactivate Caracteristica
+    end
+end
+
+View --> UI: HttpResponse (200 OK)
+deactivate View
+
+UI --> Encargado: Muestra los modelos predefinidos con sus métricas, tipo de umbral y características
+
+@enduml

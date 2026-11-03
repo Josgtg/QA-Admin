@@ -28,7 +28,7 @@ QA-Admin/
 ├── diagrams/             # Diagramas PlantUML (clases y secuencia)
 ├── qa_admin/             # Configuración, URLs y vistas del proyecto Django
 ├── static/css/app.css    # Estilos de la interfaz
-├── templates/            # Plantillas HTML (base, demo, técnicas, evidencias)
+├── templates/            # Plantillas HTML (base, demo, técnicas)
 ├── historias_de_usuario.md
 ├── manage.py
 └── requirements.txt
@@ -72,22 +72,13 @@ Rutas disponibles:
 | `/admin/` | Administración de Django |
 | `/demo/` | Demo de la interfaz visual |
 | `/tecnicas/seguimiento/` | Selección de técnicas QA por proyecto (HU-05) |
-| `/tecnicas/seguimiento/<id>/pasos/` | Pasos de una técnica y registro de su evidencia (HU-10) |
-| `/tecnicas/evidencias/<id>/abrir/` | Abre el archivo o el enlace de una evidencia (HU-10) |
-| `/modelos/` | Catálogo de modelos de calidad predefinidos (HU-03) |
+| `/modelos/proyecto/` | Modelo de calidad del proyecto activo: abre el ítem «Modelos de Calidad» del menú lateral (HU-02) |
+| `/modelos/` | Catálogo de modelos de calidad predefinidos (HU-03), desde el botón «Ver catálogo de modelos» |
 | `/` | Proyectos agrupados y filtrados por periodo (HU-07) |
 | `/crear/` | Registro de un nuevo proyecto (HU-07) |
 
 La migración `tecnicas.0004_tecnicas_ejemplo` carga un catálogo base con dos
 técnicas de ejemplo: Revisión de código y Revisión de requisitos.
-
-### Evidencias de pasos (HU-10)
-
-Cada paso de una técnica se completa registrando su evidencia: un enlace, un
-archivo o ambos, con fecha, comentario opcional y autor. Los archivos se
-guardan en `media/evidencias/` (carpeta ignorada por Git) y se aceptan PDF,
-PNG, JPG, DOCX, XLSX y TXT de hasta 5 MB; el tamaño y las extensiones se
-configuran en `apps/tecnicas/validators.py`.
 
 ## Flujo de trabajo con Git
 

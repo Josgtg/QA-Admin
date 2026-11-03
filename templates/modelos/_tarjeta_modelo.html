@@ -1,0 +1,59 @@
+{% comment %}
+Tarjeta resumen de un modelo de calidad (HU-02).
+
+Se usa en la pantalla de selección. El catálogo (HU-03) usa la tabla detallada.
+{% endcomment %}
+<section class="card model-card section-gap">
+    <div class="card-head">
+        <div>
+            <h3>{{ modelo.nombre }}</h3>
+            <p class="model-description">{{ modelo.descripcion }}</p>
+        </div>
+        {% if aplicado and aplicado.modelo_calidad_id == modelo.pk %}
+        <span class="status green">Aplicado</span>
+        {% else %}
+        <span class="head-muted">
+            {{ modelo.obtener_modelo_metricas|length }} métrica{{ modelo.obtener_modelo_metricas|length|pluralize:"s" }}
+        </span>
+        {% endif %}
+    </div>
+
+    <dl class="detail-list">
+        <dt>Características</dt>
+        <dd>
+            {% for caracteristica in modelo.obtener_caracteristicas %}
+            <span class="role-tag">{{ caracteristica.nombre }}</span>
+            {% empty %}
+            <span class="muted">Sin características</span>
+            {% endfor %}
+        </dd>
+        <dt>Umbrales</dt>
+        <dd>
+            {% for mm in modelo.obtener_modelo_metricas %}
+            <div class="cell-sub">
+                {{ mm.metrica.nombre }}:
+                {% if mm.tipo_umbral == 'MINIMO' %}≥{% else %}≤{% endif %}
+                {{ mm.umbral|floatformat:'-2' }} {{ mm.metrica.unidad }}
+            </div>
+            {% empty %}
+            <span class="muted">Este modelo no tiene métricas configuradas.</span>
+            {% endfor %}
+        </dd>
+    </dl>
+
+    <div class="detail-actions">
+        <form method="post" action="{% url 'reportes:aplicar_modelo' proyecto.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="modelo_id" value="{{ modelo.pk }}">
+            {% if aplicado and aplicado.modelo_calidad_id == modelo.pk %}
+            <button class="btn btn-outline" type="submit" disabled>
+                Modelo vigente
+            </button>
+            {% else %}
+            <button class="btn btn-primary" type="submit">
+                Aplicar modelo
+            </button>
+            {% endif %}
+        </form>
+    </div>
+</section>

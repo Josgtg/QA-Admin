@@ -1,0 +1,271 @@
+@startuml hu6_clases
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+
+' ── Layout aireado ──
+skinparam nodesep 90
+skinparam ranksep 120
+skinparam padding 8
+skinparam defaultFontSize 12
+skinparam classFontSize 13
+skinparam classFontStyle bold
+
+top to bottom direction
+
+title Clases: seguimiento multi-proyecto del QA (HU-06)
+
+' ═════════════════════════════════════════════
+' TEMPLATES
+' ═════════════════════════════════════════════
+package "reportes.template" #FAEEDA {
+  class ListaProyectosTemplate
+  class PrevisualizacionProyectoTemplate
+  class EstadoVacioTemplate
+  class ProyectoFormTemplate
+  class TableroProyectoTemplate
+}
+
+' ═════════════════════════════════════════════
+' VIEWS
+' ═════════════════════════════════════════════
+package "reportes.view" #FAEEDA {
+  class ListaProyectosView {
+    + get(request)
+    + hay_proyectos(): boolean
+    + seleccionar(proyecto_id): Proyecto
+    + ir_a_crear()
+    + ir_a_editar(proyecto)
+    + ir_a_tablero(proyecto)
+  }
+
+  class CrearProyectoView {
+    + get(request)
+    + post(request)
+  }
+
+  class EditarProyectoView {
+    + get(request, proyecto_id)
+    + post(request)
+    + agregar_miembro(proyecto, persona, rol)
+    + actualizar_rol(miembro, rol)
+    + desactivar_miembro(miembro)
+    + reactivar_miembro(miembro)
+  }
+
+  class TableroProyectoView {
+    + get(request, proyecto_id)
+    + volver_a_lista()
+  }
+}
+
+' ═════════════════════════════════════════════
+' MODELOS
+' ═════════════════════════════════════════════
+package "reportes.model" #FAEEDA {
+  class Persona {
+    - id: int
+    - nombre: String
+  }
+
+  class Proyecto {
+    - id: int
+    - nombre: String
+    - fecha_inicio: Date
+    - fecha_fin: Date
+    + periodo(): String
+    + indice_salud(): Float
+    + equipo_activo()
+    + miembros_todos()
+    + agregar_miembro(persona, rol)
+    + revisiones()
+    + seguimientos()
+  }
+
+  class MiembroProyecto {
+    - id: int
+    - rol: String
+    - activo: boolean
+    + desactivar()
+    + reactivar()
+    + cambiar_rol(nuevo_rol)
+    + clean()
+  }
+}
+
+package "modelos.model" #EEEDFE {
+  enum TipoUmbral {
+    MINIMO
+    MAXIMO
+  }
+
+  class ModeloCalidad {
+    - id: int
+    - nombre: String
+  }
+
+  class Metrica {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - valor_min: Float
+    - valor_max: Float
+  }
+
+  class ModeloAplicado {
+    - id: int
+    - fecha_aplicacion: Date
+    - vigente: boolean
+    + es_vigente(): boolean
+  }
+
+  class MetricaAplicada {
+    - id: int
+    - umbral: Float
+    - tipo_umbral: TipoUmbral
+    - activa: boolean
+    + evaluar_cumplimiento(valor: Float): boolean
+  }
+
+  class RevisionMetrica {
+    - id: int
+    - valor: Float
+    - fecha: Date
+    - enlace: String
+    - archivo: String
+    - cumple: boolean
+    + calcular_cumple(): boolean
+  }
+}
+
+package "tecnicas.model" #E1F5EE {
+  class SeguimientoTecnica {
+    - id: int
+    - activa: boolean
+    + desactivar()
+    + tiene_evidencias_registradas()
+  }
+}
+
+' ═════════════════════════════════════════════
+' RELACIONES DE DOMINIO
+' ═════════════════════════════════════════════
+Persona        "1" --> "0..*" MiembroProyecto    : persona
+Proyecto       "1" *-- "0..*" MiembroProyecto    : equipo
+Proyecto       "1" --> "0..*" ModeloAplicado      : historial de aplicaciones
+ModeloCalidad  "1" --> "0..*" ModeloAplicado      : se usa en
+ModeloAplicado "1" *-- "1..*" MetricaAplicada     : instantánea
+Metrica        "1" --> "0..*" MetricaAplicada     : se aplica como
+MetricaAplicada "1" --> "0..*" RevisionMetrica    : se mide en
+MiembroProyecto "1" --> "0..*" RevisionMetrica   : autor de
+MetricaAplicada --> TipoUmbral
+Proyecto       "1" *-- "0..*" SeguimientoTecnica : seguimientos
+
+' ═════════════════════════════════════════════
+' LISTA Y PREVISUALIZACIÓN
+' ═════════════════════════════════════════════
+ListaProyectosView ..> Proyecto                         : lee todos
+ListaProyectosView ..> ListaProyectosTemplate           : render lista
+ListaProyectosView ..> PrevisualizacionProyectoTemplate : render panel
+ListaProyectosView ..> EstadoVacioTemplate              : estado vacío
+ListaProyectosView ..> CrearProyectoView                : ir_a_crear
+ListaProyectosView ..> EditarProyectoView               : ir_a_editar
+ListaProyectosView ..> TableroProyectoView              : ir_a_tablero
+
+' ═════════════════════════════════════════════
+' CREACIÓN DE PROYECTO
+' ═════════════════════════════════════════════
+CrearProyectoView ..> Proyecto             : crea
+CrearProyectoView ..> MiembroProyecto      : registra equipo
+CrearProyectoView ..> ProyectoFormTemplate : render form
+
+' ═════════════════════════════════════════════
+' EDICIÓN DE PROYECTO Y EQUIPO
+' ═════════════════════════════════════════════
+EditarProyectoView ..> Proyecto             : lee por id
+EditarProyectoView ..> MiembroProyecto      : gestiona
+EditarProyectoView ..> ProyectoFormTemplate : render form
+
+' ═════════════════════════════════════════════
+' TABLERO
+' ═════════════════════════════════════════════
+TableroProyectoView ..> Proyecto                : lee por id
+TableroProyectoView ..> TableroProyectoTemplate : render tablero
+TableroProyectoView ..> ListaProyectosView      : volver
+
+' ═════════════════════════════════════════════
+' NOTAS DE LOS CA
+' ═════════════════════════════════════════════
+
+note top of ListaProyectosView
+  CA1 · Lista con nombre, periodo()
+  e indice_salud(). Al seleccionar,
+  el panel muestra nombre, salud,
+  fechas y equipo_activo() sin
+  salir de la lista. Acciones del
+  panel: consultar (tablero), editar,
+  técnicas y métricas. Acción global:
+  crear proyecto.
+  indice_salud() no tiene fórmula
+  definida aquí.
+end note
+
+note top of EstadoVacioTemplate
+  CA5 · Si no hay proyectos,
+  invita a crear el primero.
+end note
+
+note right of CrearProyectoView
+  CA2 · Crear proyecto registra
+  también el equipo inicial
+  (Persona, rol). Comparte
+  ProyectoFormTemplate con
+  EditarProyectoView.
+end note
+
+note right of EditarProyectoView
+  CA2 · Reutiliza el mismo
+  formulario de creación. Aquí
+  sí se puede desactivar
+  miembros (baja lógica:
+  activo = False).
+end note
+
+note right of TableroProyectoView
+  CA3 · Se abre por proyecto_id.
+  Solo volver_a_lista(); para
+  ver otro proyecto se regresa
+  a la lista.
+end note
+
+note right of Proyecto
+  CA4 · El tablero solo lee
+  vía revisiones() y
+  seguimientos(), querysets
+  filtrados por self.id.
+  Imposible mezclar proyectos.
+end note
+
+note bottom of RevisionMetrica
+  Se relaciona con MetricaAplicada y con
+  MiembroProyecto como autor. Proyecto y
+  Metrica se obtienen a través de la
+  instantánea. El autor debe ser
+  MiembroProyecto del mismo Proyecto
+  (se valida en clean()). cumple se calcula
+  con el umbral y tipo_umbral de la
+  instantánea; las métricas comunes
+  conservan su historial al cambiar de
+  modelo.
+end note
+
+note bottom of ModeloAplicado
+  Historial de aplicaciones del proyecto:
+  como máximo una vigente. Cambiar de modelo
+  cierra la anterior y crea una nueva
+  instantánea; no se borran las revisiones.
+  Proyecto.revisiones() se deriva recorriendo
+  las aplicaciones y sus métricas aplicadas.
+end note
+@enduml

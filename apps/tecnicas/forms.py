@@ -1,6 +1,8 @@
 from django import forms
 from django.utils import timezone
 
+from apps.reportes.models import MiembroProyecto
+
 from .models import Evidencia
 from .validators import (
     EXTENSIONES_PERMITIDAS,
@@ -10,79 +12,66 @@ from .validators import (
 
 
 class EvidenciaForm(forms.ModelForm):
-    """Datos que pide HU-10 para registrar la evidencia de un paso."""
+    """Evidencia de un paso: enlace o archivo, fecha, autor y comentario."""
+
+    comentario = forms.CharField(
+        required=False,
+        label='Comentario',
+        widget=forms.Textarea(
+            attrs={'class': 'select-input', 'rows': 3}
+        ),
+    )
 
     class Meta:
         model = Evidencia
-        fields = ['enlace', 'archivo', 'fecha', 'comentario', 'autor']
+        fields = ['enlace', 'archivo', 'fecha', 'miembro_proyecto']
         labels = {
-            'enlace': 'Enlace',
-            'archivo': 'Archivo',
+            'enlace': 'Enlace de la evidencia',
+            'archivo': 'Archivo de la evidencia',
             'fecha': 'Fecha de la evidencia',
-            'comentario': 'Comentario (opcional)',
-            'autor': 'Autor',
+            'miembro_proyecto': 'Persona que registra',
         }
         widgets = {
-            'enlace': forms.URLInput(
-                attrs={
-                    'class': 'select-input',
-                    'placeholder': 'https://...',
-                }
-            ),
-            'archivo': forms.ClearableFileInput(
-                attrs={
-                    'class': 'file-input',
-                    'accept': ','.join(EXTENSIONES_PERMITIDAS),
-                }
-            ),
             'fecha': forms.DateInput(
                 attrs={'type': 'date', 'class': 'select-input'},
                 format='%Y-%m-%d',
             ),
-            'comentario': forms.Textarea(
-                attrs={
-                    'class': 'select-input textarea-input',
-                    'rows': 3,
-                    'placeholder': 'Notas sobre la evidencia (opcional)',
-                }
-            ),
-            'autor': forms.TextInput(
+            'archivo': forms.ClearableFileInput(
                 attrs={
                     'class': 'select-input',
-                    'list': 'autores-proyecto',
-                    'placeholder': 'Nombre de quien registra',
+                    'accept': ','.join(EXTENSIONES_PERMITIDAS),
                 }
             ),
         }
-        error_messages = {
-            'enlace': {
-                'invalid': 'Escribe un enlace válido (https://...).',
-            },
-            'fecha': {
-                'required': 'Indica la fecha de la evidencia.',
-                'invalid': 'Introduce una fecha válida.',
-            },
-            'autor': {
-                'required': 'Indica quién registra la evidencia.',
-            },
-        }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, proyecto=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.proyecto = proyecto
+        equipos = MiembroProyecto.objects.none()
+        if proyecto is not None:
+            equipos = proyecto.equipo_activo()
+        self.fields['miembro_proyecto'].queryset = equipos
+        self.fields['miembro_proyecto'].required = True
+        self.fields['enlace'].required = False
+        self.fields['archivo'].required = False
+        self.fields['fecha'].required = False
         self.fields['fecha'].initial = timezone.localdate()
         self.fields['archivo'].help_text = (
             f'Formatos aceptados: {FORMATOS_ACEPTADOS}. '
             f'Tamaño máximo: {TAMANO_MAXIMO_MB} MB.'
         )
+        self.fields['enlace'].widget.attrs['class'] = 'select-input'
+        self.fields['miembro_proyecto'].widget.attrs['class'] = (
+            'select-input'
+        )
 
     def clean(self):
-        """Exige un enlace o un archivo y normaliza el enlace escrito."""
         cleaned = super().clean()
-        enlace = (cleaned.get('enlace') or '').strip()
-        archivo = cleaned.get('archivo')
-        if not enlace and not archivo:
-            raise forms.ValidationError(
-                'Registra un enlace o adjunta un archivo como evidencia.'
+        if not cleaned.get('enlace') and not cleaned.get('archivo'):
+            self.add_error(
+                'enlace',
+                'Adjunta un enlace o un archivo como evidencia.',
             )
-        cleaned['enlace'] = enlace
+        if not cleaned.get('fecha'):
+            cleaned['fecha'] = timezone.localdate()
         return cleaned

@@ -1,0 +1,113 @@
+@startuml hu4_clases
+allowmixing
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam nodesep 70
+skinparam ranksep 95
+top to bottom direction
+
+title Clases: catálogo de técnicas QA (HU-04)
+
+actor "Encargado de QA" as Encargado
+
+package "tecnicas.template" #E1F5EE {
+  class CatalogoTecnicasTemplate
+  class DetalleTecnicaTemplate
+}
+
+package "tecnicas.view" #E1F5EE {
+  class CatalogoTecnicasView {
+    + get(request: HttpRequest): HttpResponse
+    + listar_tecnicas(dimension: Dimension): List<TecnicaQA>
+    + filtrar_por_dimension(dimension: Dimension): List<TecnicaQA>
+    + dimensiones_disponibles(): List<Dimension>
+  }
+
+  class DetalleTecnicaView {
+    + get(request: HttpRequest, tecnica_id: int): HttpResponse
+    + obtener_tecnica(tecnica_id: int): TecnicaQA
+    + obtener_pasos(tecnica: TecnicaQA): List<Paso>
+  }
+}
+
+package "tecnicas.model" #E1F5EE {
+  enum Dimension {
+    ESPECIFICACION
+    DISENO
+    DESARROLLO
+    CONFORMIDAD
+  }
+
+  enum TipoControl {
+    VERIFICACION
+    VALIDACION
+  }
+
+  class TecnicaQA {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - objetivo: String
+    - pregunta_clave: String
+    - dimension: Dimension
+    - tipo_control: TipoControl
+    + obtener_pasos(): List<Paso>
+  }
+
+  class Paso {
+    - id: int
+    - orden: int
+    - instruccion: String
+    - evidencia_esperada: String
+  }
+}
+
+TecnicaQA "1" *-- "1..*" Paso : define
+TecnicaQA --> Dimension
+TecnicaQA --> TipoControl
+
+Encargado ..> CatalogoTecnicasTemplate : interactúa
+CatalogoTecnicasTemplate ..> CatalogoTecnicasView : dispara solicitud
+CatalogoTecnicasView ..> TecnicaQA : lista y filtra
+CatalogoTecnicasView ..> Dimension : filtra por
+CatalogoTecnicasView ..> DetalleTecnicaView : abre detalle
+
+DetalleTecnicaTemplate ..> DetalleTecnicaView : dispara solicitud
+DetalleTecnicaView ..> TecnicaQA : consulta detalle
+DetalleTecnicaView ..> Paso : lista pasos ordenados
+DetalleTecnicaView ..> DetalleTecnicaTemplate : renderiza
+
+note top of CatalogoTecnicasView
+  CA1 · El catálogo base muestra 8 técnicas,
+  dos por cada dimensión. Cada tarjeta muestra
+  nombre, dimensión, tipo de control y
+  descripción. CA2 · Se puede filtrar por
+  dimensión; si no hay coincidencias se muestra
+  un estado vacío.
+end note
+
+note right of DetalleTecnicaView
+  CA3 · El detalle muestra objetivo, pregunta
+  clave y la evidencia esperada de cada paso.
+  Los pasos se listan en orden ascendente.
+end note
+
+note bottom of TecnicaQA
+  El catálogo base es de solo lectura en HU-04,
+  salvo la selección de técnicas del proyecto
+  (checkbox por tarjeta), que es HU-05. La
+  creación y edición de técnicas propias
+  corresponde a HU-17. La distinción entre
+  técnica base y propia se definirá en esa
+  historia.
+end note
+
+note bottom of Paso
+  UNIQUE(tecnica, orden). evidencia_esperada
+  describe qué se debe adjuntar al completar el
+  paso; la evidencia concreta se registra en
+  HU-10 sobre SeguimientoPaso.
+end note
+@enduml

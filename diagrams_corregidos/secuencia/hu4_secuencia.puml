@@ -1,0 +1,77 @@
+@startuml hu4_secuencia
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer"
+  participant "CatalogoTecnicasTemplate" as CatalogoUI
+  participant "DetalleTecnicaTemplate" as DetalleUI
+end box
+
+box "View Layer (tecnicas.view)"
+  participant "CatalogoTecnicasView" as CatalogoView
+  participant "DetalleTecnicaView" as DetalleView
+end box
+
+box "Model Layer (tecnicas.model)"
+  participant "TecnicaQA" as Tecnica
+  participant "Paso" as Paso
+  participant "Dimension" as Dimension
+end box
+
+== Catálogo y detalle de técnicas QA (HU-04) ==
+
+Encargado -> CatalogoUI: Abre el catálogo de técnicas
+CatalogoUI -> CatalogoView: get(request)
+activate CatalogoView
+
+CatalogoView -> CatalogoView: dimensiones_disponibles()
+CatalogoView -> CatalogoView: listar_tecnicas()
+activate CatalogoView
+loop "por cada técnica base (8, dos por dimensión)"
+    CatalogoView -> Tecnica: obtener_pasos()
+    activate Tecnica
+    Tecnica --> CatalogoView: List<Paso>
+    deactivate Tecnica
+end
+deactivate CatalogoView
+
+CatalogoView --> CatalogoUI: HttpResponse (200, técnicas + dimensiones disponibles)
+deactivate CatalogoView
+
+CatalogoUI --> Encargado: muestra 8 técnicas, filtro por dimensión y estado vacío si no hay coincidencias
+
+Encargado -> CatalogoUI: Filtrar por dimensión
+CatalogoUI -> CatalogoView: filtrar_por_dimension(dimension)
+activate CatalogoView
+loop "por cada técnica filtrada"
+    CatalogoView -> Tecnica: obtener_pasos()
+    activate Tecnica
+    Tecnica --> CatalogoView: List<Paso>
+    deactivate Tecnica
+end
+CatalogoView --> CatalogoUI: HttpResponse (200, técnicas filtradas)
+deactivate CatalogoView
+CatalogoUI --> Encargado: muestra técnicas de la dimensión seleccionada
+
+Encargado -> CatalogoUI: Ver detalle de una técnica
+CatalogoUI -> DetalleView: get(request, tecnica_id)
+activate DetalleView
+
+DetalleView -> Tecnica: obtener_tecnica(tecnica_id)
+activate Tecnica
+Tecnica --> DetalleView: tecnica (nombre, objetivo, pregunta clave, dimensión, tipo control)
+deactivate Tecnica
+
+DetalleView -> Tecnica: obtener_pasos()
+activate Tecnica
+Tecnica --> DetalleView: pasos ordenados por orden ascendente (instrucción, evidencia esperada)
+deactivate Tecnica
+
+DetalleView --> DetalleUI: HttpResponse (200, objetivo, pregunta clave, pasos con evidencia esperada)
+deactivate DetalleView
+
+DetalleUI --> Encargado: muestra detalle de la técnica con pasos ordenados
+
+@enduml

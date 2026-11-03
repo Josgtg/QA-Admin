@@ -1,0 +1,92 @@
+@startuml
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer"
+  participant "SeleccionTecnicaTemplate" as UI
+end box
+
+box "View Layer (tecnicas.view)"
+  participant "SeguirTecnicaView" as View
+end box
+
+box "Model Layer (reportes.model)"
+  participant "p: Proyecto" as Proyecto
+end box
+
+box "Model Layer (tecnicas.model)"
+  participant "tqa: TecnicaQA" as Tecnica
+  participant "st: SeguimientoTecnica" as SegTecnica
+  participant "sp: SeguimientoPaso" as SegPaso
+  participant "e: Evidencia" as Evidencia
+  participant "mp: MiembroProyecto" as Miembro
+end box
+
+== Selección y seguimiento de Técnica con evidencia por paso (HU-05) ==
+
+Encargado -> UI: Selecciona una técnica para el proyecto
+UI -> View: post(req: HttpRequest)
+activate View
+
+View -> Proyecto: seguir_tecnica(tqa)
+activate Proyecto
+
+Proyecto -> SegTecnica: new(proyecto, tqa)
+activate SegTecnica
+
+SegTecnica -> Tecnica: obtener_pasos()
+activate Tecnica
+Tecnica --> SegTecnica: List<Paso>
+deactivate Tecnica
+
+loop "por cada Paso obtenido"
+    SegTecnica -> SegPaso: new(seguimiento_tecnica=st, paso=paso, completado=false)
+end
+
+SegTecnica --> Proyecto: st: SeguimientoTecnica instanciado
+deactivate SegTecnica
+
+Proyecto --> View: técnica asignada exitosamente
+deactivate Proyecto
+
+View --> UI: HttpResponse (200 OK / Redirect)
+deactivate View
+
+UI --> Encargado: Muestra la técnica en el seguimiento del proyecto
+
+== Registrar evidencia contra un SeguimientoPaso (HU-10 / HU-05) ==
+
+Encargado -> UI: Sube evidencia para un paso
+UI -> View: registrar_evidencia(req: HttpRequest, seguimiento_paso_id)
+activate View
+
+View -> SegPaso: objects.get(pk=seguimiento_paso_id)
+activate SegPaso
+SegPaso --> View: sp: SeguimientoPaso
+deactivate SegPaso
+
+View -> Miembro: clean()
+activate Miembro
+Miembro --> View: autor: MiembroProyecto del mismo proyecto
+deactivate Miembro
+
+create participant "e: Evidencia" as EvidenciaNueva
+View -> EvidenciaNueva: Evidencia(seguimiento_paso=sp, miembro_proyecto=autor, enlace, archivo, fecha_registro)
+activate EvidenciaNueva
+EvidenciaNueva -> EvidenciaNueva: tiene_enlace_o_archivo()
+EvidenciaNueva --> View: e: Evidencia
+deactivate EvidenciaNueva
+
+View -> sp: marcar_completado()
+activate sp
+sp --> View: completado: boolean
+deactivate sp
+
+View --> UI: HttpResponse (200, evidencia registrada)
+deactivate View
+
+UI --> Encargado: Paso marcado como completado con su evidencia
+
+@enduml

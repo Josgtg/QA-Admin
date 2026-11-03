@@ -1,0 +1,51 @@
+@startuml
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer"
+  participant "ListaProyectosTemplate" as UI
+end box
+
+box "View Layer (reportes.view)"
+  participant "ListaProyectosView" as View
+end box
+
+box "Model Layer (reportes.model)"
+  participant "Proyecto" as Proyecto
+end box
+
+== Proyectos por periodo (HU-07) ==
+
+Encargado -> UI: Abre la lista de proyectos y elige un filtro de periodo (opcional)
+UI -> View: get(req: HttpRequest)
+activate View
+
+alt "con filtro de fechas o periodo"
+    View -> Proyecto: esta_en_periodo(periodo)
+    activate Proyecto
+    Proyecto --> View: List<Proyecto> (periodo derivado: futuro / activo / terminado)
+    deactivate Proyecto
+else "sin filtro"
+    View -> Proyecto: objects.all()
+    activate Proyecto
+    Proyecto --> View: List<Proyecto>
+    deactivate Proyecto
+end
+
+loop "por cada Proyecto, agrupado por periodo() y ordenado por fecha_inicio descendente"
+    View -> Proyecto: periodo()
+    activate Proyecto
+    Proyecto --> View: String (futuro, activo o terminado)
+    deactivate Proyecto
+end
+
+View -> View: agrupar_por_periodo(proyectos)
+
+View --> UI: HttpResponse (200 OK)
+deactivate View
+
+UI --> Encargado: Muestra los proyectos agrupados por periodo o «No hay proyectos en este periodo»
+
+@enduml

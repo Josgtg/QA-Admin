@@ -64,6 +64,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'qa_admin.context_processors.navegacion',
             ],
         },
     },
@@ -124,10 +125,11 @@ STATICFILES_DIRS = [
 ]
 
 
-# Media files (evidence uploaded by HU-10)
+# Media files (evidencias subidas por el usuario)
 # https://docs.djangoproject.com/en/6.1/topics/files/
 
 MEDIA_URL = 'media/'
+
 MEDIA_ROOT = BASE_DIR / 'media'
 
 

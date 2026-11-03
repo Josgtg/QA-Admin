@@ -1,0 +1,20 @@
+{% comment %}
+Fila resumen de una métrica aplicada (tablero del proyecto).
+{% endcomment %}
+<div class="tech-item">
+    {% if fila.valor is None %}
+    <span class="tech-icon amber"><svg class="icon"><use href="#i-alert-circle"></use></svg></span>
+    {% elif fila.aceptada %}
+    <span class="tech-icon green"><svg class="icon"><use href="#i-check-circle"></use></svg></span>
+    {% else %}
+    <span class="tech-icon amber"><svg class="icon"><use href="#i-alert-circle"></use></svg></span>
+    {% endif %}
+    <span class="tech-name">{{ fila.metrica.nombre }}</span>
+    {% if fila.valor is None %}
+    <span class="tech-status gray">Sin medición</span>
+    {% elif fila.aceptada %}
+    <span class="tech-status green">{{ fila.valor|floatformat:'-2' }} {{ fila.metrica.unidad }}</span>
+    {% else %}
+    <span class="tech-status amber">No cumple</span>
+    {% endif %}
+</div>

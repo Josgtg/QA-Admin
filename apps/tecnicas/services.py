@@ -1,40 +1,67 @@
-"""Servicios de la app técnicas (lógica de negocio fuera de las vistas)."""
+"""Servicios de seguimiento de técnicas (compartidos por las vistas).
+
+La lógica vive aquí para que ``SeguirTecnicaView`` y ``CatalogoTecnicasView``
+hagan exactamente lo mismo al aplicar una selección (H4-4=b).
+"""
 
 from django.db import transaction
-from django.utils import timezone
 
-from .models import Evidencia, SeguimientoPaso
-
-
-class RegistroEvidenciaError(Exception):
-    """Error de negocio al registrar la evidencia de un paso."""
+from .models import SeguimientoPaso, SeguimientoTecnica, TecnicaQA
 
 
-class RegistrarEvidenciaService:
-    """Registra la evidencia de un paso y lo marca como completado (HU-10)."""
+@transaction.atomic
+def seguir_tecnica(proyecto, tecnica):
+    """Crea (o reactiva) el seguimiento y sus pasos, sin duplicarlos."""
+    seguimiento, _ = SeguimientoTecnica.objects.get_or_create(
+        proyecto=proyecto,
+        tecnica=tecnica,
+    )
+    if not seguimiento.activa:
+        seguimiento.reactivar()
 
-    def __init__(self, seguimiento_paso: SeguimientoPaso):
-        self.seguimiento_paso = seguimiento_paso
-
-    @transaction.atomic
-    def registrar(
-        self,
-        *,
-        enlace='',
-        archivo=None,
-        fecha=None,
-        comentario='',
-        autor='',
-    ) -> Evidencia:
-        """Crea la evidencia y completa el paso en una sola transacción."""
-        if self.seguimiento_paso.completado:
-            raise RegistroEvidenciaError(
-                'Este paso ya está completado y tiene evidencia registrada.'
+    registrados = set(
+        seguimiento.pasos.values_list('paso_id', flat=True)
+    )
+    for paso in tecnica.obtener_pasos():
+        if paso.pk not in registrados:
+            SeguimientoPaso.objects.create(
+                seguimiento=seguimiento,
+                paso=paso,
             )
-        return self.seguimiento_paso.registrar_evidencia(
-            enlace=enlace,
-            archivo=archivo,
-            fecha=fecha or timezone.localdate(),
-            comentario=comentario,
-            autor=autor,
+    seguimiento.calcular_avance()
+    return seguimiento
+
+
+def remover_tecnica(seguimiento):
+    """Baja lógica: conserva pasos y evidencias (``hu5_clases.puml``)."""
+    seguimiento.desactivar()
+
+
+@transaction.atomic
+def aplicar_seleccion(proyecto, tecnicas_ids):
+    """Sincroniza los seguimientos activos del proyecto con la selección."""
+    tecnicas_ids = set(tecnicas_ids)
+
+    for tecnica in TecnicaQA.objects.filter(pk__in=tecnicas_ids):
+        seguir_tecnica(proyecto, tecnica)
+
+    for seguimiento in proyecto.seguimientos_tecnicas.filter(
+        activa=True
+    ).exclude(tecnica_id__in=tecnicas_ids):
+        remover_tecnica(seguimiento)
+
+
+def dimensiones_sin_tecnicas(proyecto):
+    """Etiquetas de dimensión sin ninguna técnica en seguimiento."""
+    from .models import Dimension
+
+    activas = set(
+        proyecto.seguimientos_tecnicas.filter(activa=True).values_list(
+            'tecnica__dimension', flat=True
         )
+    )
+    return [
+        etiqueta
+        for valor, etiqueta in Dimension.choices
+        if valor not in activas
+    ]

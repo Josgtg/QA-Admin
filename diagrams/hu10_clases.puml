@@ -15,10 +15,10 @@ package "tecnicas" #E1F5EE {
 
   package "view" {
     class RegistrarEvidenciaView {
-      + get(req: HttpRequest, seguimiento_id: int): HttpResponse
-      + post(req: HttpRequest, seguimiento_id: int): HttpResponse
-      + obtener_paso(seguimiento_id: int, paso_id: int): SeguimientoPaso
-      + renderizar(req: HttpRequest, formulario: EvidenciaForm, paso_id: int): HttpResponse
+      + get(req: HttpRequest, seguimiento_paso_id: int): HttpResponse
+      + post(req: HttpRequest, seguimiento_paso_id: int): HttpResponse
+      + obtener_paso(seguimiento_paso_id: int): SeguimientoPaso
+      + renderizar(req: HttpRequest, formulario: EvidenciaForm): HttpResponse
     }
 
     class AbrirEvidenciaView {
@@ -33,7 +33,7 @@ package "tecnicas" #E1F5EE {
       - archivo: FileField
       - fecha: DateField
       - comentario: String
-      - autor: MiembroProyecto
+      - miembro_proyecto: MiembroProyecto
       + clean(): Map
       + is_valid(): boolean
     }
@@ -60,8 +60,8 @@ package "tecnicas" #E1F5EE {
       - porcentaje_avance: Float
       - activa: boolean
       + calcular_avance(): Float
-      + obtener_pasos(): List<SeguimientoPaso>
       + tiene_evidencias_registradas(): boolean
+      + desactivar(): void
     }
 
     class SeguimientoPaso {
@@ -69,9 +69,9 @@ package "tecnicas" #E1F5EE {
       - completado: boolean
       - comentario: String
       - fecha_completado: DateTime
-      + registrar_evidencia(enlace: String, archivo: File, fecha: Date, comentario: String, autor: MiembroProyecto): Evidencia
-      + marcar_completado(): void
       + esta_completado(): boolean
+      + tiene_evidencia(): boolean
+      + marcar_completado(comentario: String): void
     }
 
     class Evidencia {
@@ -81,6 +81,7 @@ package "tecnicas" #E1F5EE {
       - fecha: Date
       - fecha_registro: DateTime
       + tiene_enlace_o_archivo(): boolean
+      + nombre_archivo(): String
       + descripcion(): String
       + abrir_archivo(): File
       + clean(): void
@@ -116,28 +117,30 @@ SeguimientoTecnica "*" -- "1" Proyecto : sigue
 Evidencia "*" -- "1" MiembroProyecto : autor
 
 RegistroEvidenciaTemplate ..> RegistrarEvidenciaView : dispara solicitud >
-RegistrarEvidenciaView ..> EvidenciaForm : valida >
-RegistrarEvidenciaView ..> SeguimientoPaso : registra >
+RegistrarEvidenciaView ..> EvidenciaForm : valida datos >
+RegistrarEvidenciaView ..> Evidencia : registra o reemplaza >
+RegistrarEvidenciaView ..> SeguimientoPaso : completa paso >
 AbrirEvidenciaView ..> Evidencia : abre >
 
 note right of Evidencia
-  UNIQUE(seguimiento_paso_id): máximo una evidencia por paso.
-  CHECK(enlace IS NOT NULL OR archivo IS NOT NULL).
+  UNIQUE(seguimiento_paso_id): una evidencia por paso.
+  CHECK(enlace no vacio OR archivo no vacio).
   El miembro_proyecto (autor) debe pertenecer al proyecto
-  de seguimiento_paso; se valida en clean().
+  del paso; se valida en clean().
   fecha es la fecha declarada por el usuario (HU-10);
-  fecha_registro la sella el alta automáticamente.
+  fecha_registro la sella el alta automaticamente.
+  Formatos: PDF, PNG, JPG, DOCX, XLSX y TXT; maximo 5 MB.
 end note
 
 note bottom of SeguimientoPaso
   Un paso no se marca completado sin evidencia.
-  marcar_completado() valida que exista una Evidencia
-  asociada y registra la fecha_completado.
+  marcar_completado() valida que exista la Evidencia,
+  guarda fecha_completado y recalcula el avance.
 end note
 
 note right of RegistrarEvidenciaView
-  La vista valida el formulario y que el paso pertenezca
-  al seguimiento consultado (404 si no); delega el alta
-  en SeguimientoPaso.registrar_evidencia.
+  Valida el formulario y que el paso exista; guarda la
+  evidencia (reemplaza la anterior si la hay) y recien
+  entonces completa el paso.
 end note
 @enduml

@@ -23,30 +23,29 @@ participant "e: Evidencia" as Evidencia
 participant "st: SeguimientoTecnica" as SegTecnica
 end box
 
-== Consulta de pasos y formulario (HU-10) ==
+== Consulta del formulario de evidencia (HU-10) ==
 
-Encargado -> UI: Abre los pasos de la técnica
-UI -> View: get(req: HttpRequest, seguimiento_id: int)
+Encargado -> UI: Abre el registro de evidencia de un paso
+UI -> View: get(req: HttpRequest, seguimiento_paso_id: int)
 activate View
-View -> SegTecnica: obtener_pasos()
-activate SegTecnica
-SegTecnica --> View: List<SeguimientoPaso>
-deactivate SegTecnica
+View -> SegPaso: obtener_paso(seguimiento_paso_id)
+activate SegPaso
+SegPaso --> View: SeguimientoPaso
+deactivate SegPaso
 View --> UI: HttpResponse (200 OK)
 deactivate View
-UI --> Encargado: Muestra los pasos, su evidencia y el formulario
+UI --> Encargado: Muestra el paso, su evidencia y el formulario
 
 == Registro de la evidencia (HU-10) ==
 
-Encargado -> UI: Adjunta enlace o archivo, fecha, comentario y autor
-UI -> View: post(req: HttpRequest, seguimiento_id: int)
+Encargado -> UI: Adjunta enlace o archivo, fecha, autor y comentario
+UI -> View: post(req: HttpRequest, seguimiento_paso_id: int)
 activate View
 
-View -> View: obtener_paso(seguimiento_id, paso_id)
-note right of View
-  Si el paso no pertenece al seguimiento
-  consultado se responde 404.
-end note
+View -> SegPaso: obtener_paso(seguimiento_paso_id)
+activate SegPaso
+SegPaso --> View: SeguimientoPaso
+deactivate SegPaso
 
 View -> Form: is_valid()
 activate Form
@@ -57,43 +56,44 @@ alt "formulario inválido"
     View --> UI: HttpResponse (200 con errores)
     UI --> Encargado: Señala el campo y qué se acepta
     note right of UI
-      Sin enlace ni archivo: «Registra un enlace
-      o adjunta un archivo como evidencia».
+      Sin enlace ni archivo: «Adjunta un enlace
+      o un archivo como evidencia».
       Archivo: PDF, PNG, JPG, DOCX, XLSX o TXT
       y máximo 5 MB.
     end note
 else "formulario válido"
-    View -> SegPaso: registrar_evidencia(enlace, archivo, fecha, comentario, autor)
-    activate SegPaso
+    View -> Form: save(commit=False)
+    activate Form
+    Form --> View: e: Evidencia
+    deactivate Form
 
-    SegPaso -> Evidencia: new(seguimiento_paso, miembro_proyecto, enlace, archivo, fecha)
+    View -> Evidencia: seguimiento_paso = sp
+    View -> Evidencia: full_clean()
     activate Evidencia
-    SegPaso -> Evidencia: tiene_enlace_o_archivo()
-    Evidencia --> SegPaso: true
-    SegPaso -> Evidencia: clean()
     note right of Evidencia
-      Valida que el autor pertenezca al
-      proyecto del paso.
+      Valida enlace o archivo y que el autor
+      pertenezca al proyecto del paso.
     end note
-    SegPaso -> Evidencia: save()
+    Evidencia --> View: válida
+
+    View -> Evidencia: delete(evidencia anterior)
+    View -> Evidencia: save()
     deactivate Evidencia
 
-    SegPaso -> SegPaso: marcar_completado()
+    View -> SegPaso: marcar_completado(comentario)
+    activate SegPaso
     note right of SegPaso
       Comprueba que exista evidencia y
       registra fecha_completado.
     end note
-
     SegPaso -> SegTecnica: calcular_avance()
     activate SegTecnica
     SegTecnica --> SegPaso: porcentaje_avance
     deactivate SegTecnica
-
-    SegPaso --> View: Evidencia
     deactivate SegPaso
 
-    View --> UI: HttpResponse (302 Redirect a los pasos)
-    UI --> Encargado: «Evidencia registrada; el paso quedó completado»
+    View --> UI: HttpResponse (302 Redirect al seguimiento)
+    UI --> Encargado: «Evidencia registrada y paso completado»
 end
 deactivate View
 

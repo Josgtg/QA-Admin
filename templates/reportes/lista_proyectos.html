@@ -14,7 +14,6 @@
         <form class="search" method="get" action="{% url 'reportes:lista' %}">
             <svg class="icon icon-sm"><use href="#i-search"></use></svg>
             <input type="search" name="q" value="{{ busqueda }}" placeholder="Buscar proyecto...">
-            <input type="hidden" name="filtro" value="{{ filtro }}">
             {% if periodo_seleccionado %}
             <input type="hidden" name="periodo" value="{{ periodo_seleccionado.id }}">
             {% endif %}
@@ -88,12 +87,12 @@
             <tbody>
                 {% for proyecto in grupo.proyectos %}
                 <tr class="project-row {% if proyecto_seleccionado.pk == proyecto.pk %}selected-row{% endif %}"
-                    data-href="?seleccionado={{ proyecto.pk }}&filtro={{ filtro }}{% if periodo_seleccionado %}&periodo={{ periodo_seleccionado.id }}{% endif %}{% if busqueda %}&q={{ busqueda|urlencode }}{% endif %}#detalle"
+                    data-href="?seleccionado={{ proyecto.pk }}{% if periodo_seleccionado %}&periodo={{ periodo_seleccionado.id }}{% endif %}{% if busqueda %}&q={{ busqueda|urlencode }}{% endif %}#detalle"
                     tabindex="0" role="link"
                     aria-label="Ver detalle de {{ proyecto.nombre }}">
                     <td>
                         <a class="cell-title project-link"
-                           href="?seleccionado={{ proyecto.pk }}&filtro={{ filtro }}{% if periodo_seleccionado %}&periodo={{ periodo_seleccionado.id }}{% endif %}{% if busqueda %}&q={{ busqueda|urlencode }}{% endif %}#detalle">
+                           href="?seleccionado={{ proyecto.pk }}{% if periodo_seleccionado %}&periodo={{ periodo_seleccionado.id }}{% endif %}{% if busqueda %}&q={{ busqueda|urlencode }}{% endif %}#detalle">
                             {{ proyecto.nombre }}
                         </a>
                         <div class="cell-sub">Evaluación de calidad</div>
