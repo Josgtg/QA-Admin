@@ -532,3 +532,58 @@ sección 8.
 - Se crearon los diagramas de clases de HU-01 y HU-04.
 - **No se modificaron los diagramas de secuencia.** La fase 2 queda pendiente
   de instrucción.
+
+---
+
+## 11. Cierre de la fase 3 — implementación y decisiones de integridad (2026-11-02)
+
+Tras implementar el Release 1 se cerraron los puntos que el diseño dejaba
+abiertos. Estas decisiones **no cambian la estructura de clases**; afectan a la
+integridad y a la política de borrado.
+
+### 11.1 Política `on_delete` (resuelve «Decisión pendiente sobre eliminación y auditoría»)
+
+Asimétrica, siguiendo el precedente ya existente en el código
+(`SeguimientoTecnica.tecnica` y `SeguimientoPaso.paso` ya eran `PROTECT`):
+
+| Lado | FK | `on_delete` |
+|---|---|---|
+| Catálogo | `MetricaAplicada.metrica`, `ModeloAplicado.modelo_calidad`, `ModeloMetrica.metrica`, `Metrica.caracteristica` | `PROTECT` |
+| Catálogo | `ModeloMetrica.modelo_calidad` | `CASCADE` (composición de configuración) |
+| Proyecto | `ModeloAplicado.proyecto`, `MetricaAplicada.modelo_aplicado`, `RevisionMetrica.metrica_aplicada` / `.miembro_proyecto`, `MiembroProyecto.proyecto`, `SeguimientoTecnica.proyecto`, `Evidencia.*` | `CASCADE` |
+
+**Consecuencia aceptada:** borrar un proyecto borra su historial (la interfaz
+conserva la confirmación explícita). Borrar una métrica del catálogo **no**
+arrasa las revisiones de los proyectos, que es justo lo que la instantánea
+existe para evitar.
+
+### 11.2 Excepción de dependencia `reportes` → `tecnicas`
+
+`Proyecto.seguimientos()` se implementa con el accessor inverso
+(`self.seguimientos_tecnicas`), sin importar el módulo. Es la **única**
+referencia de `reportes` hacia `tecnicas`. Se actualizó la nota de
+`SeguimientoTecnica` en `hu5_clases.puml`.
+
+### 11.3 El catálogo deja de ser de solo lectura
+
+Por decisión de producto, las tarjetas de `catalogo_tecnicas.html` llevan
+checkbox para seleccionar técnicas del proyecto activo (HU-05), además de la
+pantalla de seguimiento. Se actualizó la nota de `TecnicaQA` en
+`hu4_clases.puml`.
+
+### 11.4 Correcciones de los diagramas
+
+| Archivo | Corrección |
+|---|---|
+| `hu1_secuencia.puml` | `tiene_evidencia()` ya no se invoca sobre `MetricaAplicada`; la validación es de la vista y `RevisionMetrica.tiene_evidencia()` la revalida |
+| `hu7_secuencia.puml` | `filtrar_por_fecha(...)` → `esta_en_periodo(periodo)` (prevalecen las clases) |
+| `hu6_secuencia_crear_proyecto.puml` | `note over of` → `note over` (sintaxis PlantUML) |
+| `hu6_clases.puml` | Nota del panel de previsualización: 4 acciones (tablero, editar, técnicas, métricas) |
+
+### 11.5 Migraciones reseteadas
+
+Se borraron los 8 archivos de migración y se regeneraron **3 `0001_initial`** +
+**2 seeds** (`modelos/0002_modelos_base`, `tecnicas/0002_tecnicas_base`). El
+esquema nace con su nombre definitivo (`reportes_proyecto`) y no hay data
+migrations de conversión. El seed del catálogo incluye **6 técnicas con
+contenido `[PENDIENTE]`** (deuda de contenido, no de esquema).

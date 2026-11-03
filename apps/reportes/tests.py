@@ -4,18 +4,21 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.tecnicas.models import Proyecto, SeguimientoTecnica, TecnicaQA
+from apps.tecnicas.models import SeguimientoTecnica, TecnicaQA
 from apps.tecnicas.selection import SESSION_KEY
+from apps.modelos.models import ModeloAplicado, ModeloCalidad, RevisionMetrica
 
 from .forms import ProyectoForm
 from .models import (
     MiembroProyecto,
     Periodo,
     Persona,
+    Proyecto,
     RegistroSalud,
     registrar_salud,
     tendencia_salud,
 )
+from .views import ListaProyectosView
 
 
 def crear_proyecto(nombre='Proyecto', inicio=-10, fin=10):
@@ -48,31 +51,24 @@ class PeriodoTests(TestCase):
         self.assertEqual(activo.periodo(), Periodo.ACTIVO)
         self.assertEqual(terminado.periodo(), Periodo.TERMINADO)
 
-    def test_periodo_obtener_proyectos(self):
+    def test_esta_en_periodo(self):
         futuro = crear_proyecto('Futuro', 5, 20)
         activo = crear_proyecto('Activo', -5, 5)
         terminado = crear_proyecto('Terminado', -20, -5)
 
-        self.assertEqual(
-            list(Periodo(Periodo.FUTURO).obtener_proyectos()),
-            [futuro],
-        )
-        self.assertEqual(
-            list(Periodo(Periodo.ACTIVO).obtener_proyectos()),
-            [activo],
-        )
-        self.assertEqual(
-            list(Periodo(Periodo.TERMINADO).obtener_proyectos()),
-            [terminado],
-        )
+        self.assertTrue(futuro.esta_en_periodo(Periodo.FUTURO))
+        self.assertFalse(futuro.esta_en_periodo(Periodo.ACTIVO))
+        self.assertTrue(activo.esta_en_periodo(Periodo.ACTIVO))
+        self.assertTrue(terminado.esta_en_periodo(Periodo.TERMINADO))
 
-    def test_obtener_recientes_ordena_del_mas_reciente_al_mas_antiguo(self):
+    def test_periodos_disponibles_ordena_del_mas_reciente_al_mas_antiguo(self):
         crear_proyecto('Terminado', -20, -5)
         crear_proyecto('Activo', -5, 5)
         crear_proyecto('Futuro', 5, 20)
 
         nombres = [
-            periodo.nombre for periodo in Periodo.obtener_recientes()
+            periodo.nombre
+            for periodo in ListaProyectosView().periodos_disponibles()
         ]
 
         self.assertEqual(
@@ -278,7 +274,7 @@ class ListaProyectosViewTests(TestCase):
             fecha_fin=hoy + timedelta(days=20),
         )
         respuesta = self.client.get(
-            reverse('reportes:lista'), {'filtro': 'activos'}
+            reverse('reportes:lista'), {'periodo': 'activos'}
         )
         self.assertContains(respuesta, 'Alpha')
         self.assertNotContains(respuesta, 'Beta')
@@ -611,7 +607,21 @@ class MetricasProyectoViewTests(TestCase):
         )
         self.assertEqual(respuesta.status_code, 200)
         self.assertContains(respuesta, 'Alpha')
-        self.assertContains(respuesta, 'Sin métricas registradas')
+        self.assertContains(respuesta, 'Sin métricas configuradas')
+
+    def test_muestra_metricas_del_modelo_aplicado(self):
+        from apps.modelos.models import ModeloCalidad
+
+        proyecto = crear_proyecto('Alpha')
+        proyecto.aplicar_modelo(ModeloCalidad.objects.get(nombre='McCall'))
+
+        respuesta = self.client.get(
+            reverse('reportes:metricas', args=[proyecto.pk])
+        )
+
+        self.assertEqual(len(respuesta.context['metricas']), 4)
+        self.assertContains(respuesta, 'Requisitos implementados correctamente')
+        self.assertContains(respuesta, 'Sin medición')
 
     def test_proyecto_inexistente_404(self):
         respuesta = self.client.get(
@@ -834,4 +844,269 @@ class TableroSaludTests(TestCase):
         )
         self.assertFalse(
             RegistroSalud.objects.filter(proyecto=otro).exists()
+        )
+
+
+class ListaProyectosAccionesTests(TestCase):
+    """Métodos ir_a_* del diseño (hu6_clases.puml)."""
+
+    def test_ir_a_crear_redirige(self):
+        respuesta = self.client.get(
+            reverse('reportes:lista'), {'ir': 'crear'}
+        )
+
+        self.assertRedirects(respuesta, reverse('reportes:crear'))
+
+    def test_ir_a_tablero_redirige(self):
+        proyecto = crear_proyecto('Alpha')
+
+        respuesta = self.client.get(
+            reverse('reportes:lista'),
+            {'ir': 'tablero', 'proyecto': proyecto.pk},
+        )
+
+        self.assertRedirects(
+            respuesta,
+            reverse('reportes:tablero', args=[proyecto.pk]),
+        )
+
+    def test_ir_a_editar_redirige(self):
+        proyecto = crear_proyecto('Alpha')
+
+        respuesta = self.client.get(
+            reverse('reportes:lista'),
+            {'ir': 'editar', 'proyecto': proyecto.pk},
+        )
+
+        self.assertRedirects(
+            respuesta,
+            reverse('reportes:editar', args=[proyecto.pk]),
+        )
+
+
+class AplicarModeloViewTests(TestCase):
+    def setUp(self):
+        self.proyecto = crear_proyecto('Alpha')
+        self.modelo = ModeloCalidad.objects.get(nombre='McCall')
+        self.otro = ModeloCalidad.objects.get(nombre='FURPS')
+        self.url = reverse(
+            'reportes:aplicar_modelo', args=[self.proyecto.pk]
+        )
+
+    def test_get_lista_los_modelos_predefinidos(self):
+        respuesta = self.client.get(self.url)
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(len(respuesta.context['modelos']), 4)
+
+    def test_post_aplica_y_redirige_al_tablero(self):
+        respuesta = self.client.post(
+            self.url, {'modelo_id': self.modelo.pk}
+        )
+
+        self.assertRedirects(
+            respuesta,
+            reverse('reportes:tablero', args=[self.proyecto.pk]),
+        )
+        self.assertTrue(
+            ModeloAplicado.objects.filter(
+                proyecto=self.proyecto, vigente=True
+            ).exists()
+        )
+
+    def test_post_sin_modelo_devuelve_400(self):
+        respuesta = self.client.post(self.url, {})
+
+        self.assertEqual(respuesta.status_code, 400)
+
+    def test_post_modelo_no_predefinido_404(self):
+        propio = ModeloCalidad.objects.create(
+            nombre='Propio',
+            descripcion='x',
+            predefinido=False,
+        )
+
+        respuesta = self.client.post(
+            self.url, {'modelo_id': propio.pk}
+        )
+
+        self.assertEqual(respuesta.status_code, 404)
+
+    def test_cambio_con_mediciones_pide_confirmacion(self):
+        aplicado = self.proyecto.aplicar_modelo(self.modelo)
+        persona = Persona.objects.create(nombre='Ana')
+        miembro = MiembroProyecto.objects.create(
+            proyecto=self.proyecto, persona=persona, rol='QA'
+        )
+        RevisionMetrica.objects.create(
+            metrica_aplicada=aplicado.metricas_aplicadas().first(),
+            miembro_proyecto=miembro,
+            valor=90,
+            enlace='https://ejemplo.test/a',
+        )
+
+        respuesta = self.client.post(
+            self.url, {'modelo_id': self.otro.pk}
+        )
+
+        self.assertTrue(respuesta.context['requiere_confirmacion'])
+        self.assertEqual(
+            ModeloAplicado.objects.filter(
+                proyecto=self.proyecto, vigente=True
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            ModeloAplicado.objects.get(
+                proyecto=self.proyecto, vigente=True
+            ).modelo_calidad_id,
+            self.modelo.pk,
+        )
+
+    def test_confirmacion_aplica_el_cambio(self):
+        aplicado = self.proyecto.aplicar_modelo(self.modelo)
+        persona = Persona.objects.create(nombre='Ana')
+        miembro = MiembroProyecto.objects.create(
+            proyecto=self.proyecto, persona=persona, rol='QA'
+        )
+        RevisionMetrica.objects.create(
+            metrica_aplicada=aplicado.metricas_aplicadas().first(),
+            miembro_proyecto=miembro,
+            valor=90,
+            enlace='https://ejemplo.test/a',
+        )
+
+        respuesta = self.client.post(
+            self.url,
+            {'modelo_id': self.otro.pk, 'confirmacion': '1'},
+        )
+
+        self.assertRedirects(
+            respuesta,
+            reverse('reportes:tablero', args=[self.proyecto.pk]),
+        )
+        self.assertEqual(
+            ModeloAplicado.objects.get(
+                proyecto=self.proyecto, vigente=True
+            ).modelo_calidad_id,
+            self.otro.pk,
+        )
+        self.assertEqual(
+            ModeloAplicado.objects.filter(proyecto=self.proyecto).count(),
+            2,
+        )
+
+
+class RegistrarRevisionMetricaViewTests(TestCase):
+    def setUp(self):
+        self.proyecto = crear_proyecto('Alpha')
+        self.persona = Persona.objects.create(nombre='Ana')
+        self.miembro = MiembroProyecto.objects.create(
+            proyecto=self.proyecto, persona=self.persona, rol='QA'
+        )
+        self.aplicado = self.proyecto.aplicar_modelo(
+            ModeloCalidad.objects.get(nombre='McCall')
+        )
+        self.instantanea = self.aplicado.metricas_aplicadas().get(
+            metrica__nombre='Requisitos implementados correctamente'
+        )
+        self.metrica = self.instantanea.metrica
+        self.url = reverse(
+            'reportes:registrar_revision',
+            args=[self.proyecto.pk, self.metrica.pk],
+        )
+
+    def test_get_muestra_el_formulario(self):
+        respuesta = self.client.get(self.url)
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'Registrar revisión de métrica')
+
+    def test_resuelve_la_metrica_por_su_id_no_por_la_instantanea(self):
+        """El id de la URL es el de `Metrica`, no el de `MetricaAplicada`."""
+        otro = crear_proyecto('Beta')
+        aplicado = otro.aplicar_modelo(
+            ModeloCalidad.objects.get(nombre='FURPS')
+        )
+        instantanea = aplicado.metricas_aplicadas().order_by(
+            'metrica_id'
+        ).first()
+        self.assertNotEqual(instantanea.pk, instantanea.metrica_id)
+
+        respuesta = self.client.get(
+            reverse(
+                'reportes:registrar_revision',
+                args=[otro.pk, instantanea.metrica_id],
+            )
+        )
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(
+            respuesta.context['instantanea'].pk,
+            instantanea.pk,
+        )
+
+    def test_post_registra_y_redirige_a_metricas(self):
+        respuesta = self.client.post(
+            self.url,
+            {
+                'valor': 95,
+                'fecha': timezone.localdate().isoformat(),
+                'enlace': 'https://ejemplo.test/a',
+                'miembro_proyecto': self.miembro.pk,
+            },
+        )
+
+        self.assertRedirects(
+            respuesta,
+            reverse('reportes:metricas', args=[self.proyecto.pk]),
+        )
+        self.assertEqual(self.metrica.revisiones(self.proyecto).count(), 1)
+        self.assertEqual(self.metrica.ultimo_valor(self.proyecto), 95)
+        self.assertTrue(self.metrica.esta_aceptada(self.proyecto))
+
+    def test_post_sin_evidencia_no_registra(self):
+        respuesta = self.client.post(
+            self.url,
+            {
+                'valor': 95,
+                'fecha': timezone.localdate().isoformat(),
+                'miembro_proyecto': self.miembro.pk,
+            },
+        )
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(self.metrica.revisiones(self.proyecto).count(), 0)
+
+    def test_post_fuera_de_rango_no_registra(self):
+        self.metrica.valor_min = 0
+        self.metrica.valor_max = 100
+        self.metrica.save(update_fields=['valor_min', 'valor_max'])
+
+        respuesta = self.client.post(
+            self.url,
+            {
+                'valor': 150,
+                'fecha': timezone.localdate().isoformat(),
+                'enlace': 'https://ejemplo.test/a',
+                'miembro_proyecto': self.miembro.pk,
+            },
+        )
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(self.metrica.revisiones(self.proyecto).count(), 0)
+
+    def test_sin_modelo_aplicado_redirige_a_aplicar(self):
+        proyecto = crear_proyecto('Beta')
+
+        respuesta = self.client.get(
+            reverse(
+                'reportes:registrar_revision',
+                args=[proyecto.pk, self.metrica.pk],
+            )
+        )
+
+        self.assertRedirects(
+            respuesta,
+            reverse('reportes:aplicar_modelo', args=[proyecto.pk]),
         )

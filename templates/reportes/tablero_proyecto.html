@@ -162,13 +162,35 @@
             <section class="card">
                 <div class="card-head">
                     <h3>Métricas Aplicadas</h3>
+                    {% if aplicado %}
                     <a class="link" href="{% url 'reportes:metricas' proyecto.pk %}">Gestionar</a>
+                    {% else %}
+                    <a class="link" href="{% url 'reportes:aplicar_modelo' proyecto.pk %}">Aplicar modelo</a>
+                    {% endif %}
                 </div>
+                {% if aplicado %}
+                <p class="muted">
+                    Modelo <strong>{{ aplicado.modelo_calidad.nombre }}</strong>
+                    desde {{ aplicado.fecha_aplicacion|date:"d/m/Y" }}
+                </p>
+                {% for fila in metricas_aplicadas %}
+                    {% include 'reportes/_metrica_aplicada.html' with fila=fila %}
+                {% empty %}
+                <div class="empty-row">Este modelo no tiene métricas configuradas.</div>
+                {% endfor %}
+                {% else %}
                 <div class="placeholder-block">
                     <svg class="icon"><use href="#i-metrics"></use></svg>
                     <p>Sin métricas configuradas</p>
                     <span>Aplica un modelo de calidad al proyecto para ver sus métricas aquí.</span>
                 </div>
+                <div class="detail-actions">
+                    <a class="btn btn-primary btn-sm" href="{% url 'reportes:aplicar_modelo' proyecto.pk %}">
+                        <svg class="icon icon-sm"><use href="#i-layers"></use></svg>
+                        Aplicar modelo
+                    </a>
+                </div>
+                {% endif %}
             </section>
 
             <section class="card">

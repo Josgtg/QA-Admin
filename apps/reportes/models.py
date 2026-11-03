@@ -1,17 +1,16 @@
 from datetime import date
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
-
-from apps.tecnicas.models import Proyecto
 
 
 class Periodo:
-    """Periodo derivado de las fechas del proyecto, según e-r.puml.
+    """Periodo derivado de las fechas del proyecto (``hu7_clases.puml``).
 
-    No se persiste: cada proyecto obtiene su periodo a partir de
-    ``fecha_inicio`` y ``fecha_fin``.
+    Es un **helper de presentación**: no se persiste, no hace consultas y no
+    representa una entidad de dominio. ``Proyecto.periodo()`` calcula el estado
+    y ``ListaProyectosView`` agrupa y ordena.
     """
 
     FUTURO = 'Futuro'
@@ -61,38 +60,164 @@ class Periodo:
             raise ValueError('Periodo no válido.')
         return cls(nombre)
 
-    def obtener_proyectos(self):
+
+class Proyecto(models.Model):
+    """Proyecto del encargado de calidad (``hu6_clases.puml``).
+
+    Vive en ``reportes`` según el diseño vigente. ``seguimientos()`` es la
+    única referencia permitida de esta app hacia ``tecnicas`` y se resuelve con
+    el accessor inverso, sin importar el módulo.
+    """
+
+    nombre = models.CharField(max_length=200)
+    fecha_inicio = models.DateField()
+    fecha_fin = models.DateField()
+
+    class Meta:
+        verbose_name = 'proyecto'
+        verbose_name_plural = 'proyectos'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+    def clean(self):
+        errores = {}
+        if not self.fecha_inicio:
+            errores['fecha_inicio'] = 'Indica la fecha de inicio.'
+        if not self.fecha_fin:
+            errores['fecha_fin'] = 'Indica la fecha de fin.'
+        if (
+            self.fecha_inicio
+            and self.fecha_fin
+            and self.fecha_fin < self.fecha_inicio
+        ):
+            errores['fecha_fin'] = (
+                'La fecha de fin no puede ser anterior a la de inicio.'
+            )
+        if errores:
+            raise ValidationError(errores)
+
+    @property
+    def fecha_fin_estimada(self):
+        return self.fecha_fin
+
+    def periodo(self):
+        """Estado derivado de las fechas: Futuro, Activo o Terminado."""
         hoy = timezone.localdate()
-        if self.nombre == self.FUTURO:
-            filtros = {'fecha_inicio__gt': hoy}
-        elif self.nombre == self.ACTIVO:
-            filtros = {
-                'fecha_inicio__lte': hoy,
-                'fecha_fin__gte': hoy,
-            }
-        else:
-            filtros = {'fecha_fin__lt': hoy}
-        return Proyecto.objects.filter(**filtros).order_by(
-            '-fecha_inicio',
-            'nombre',
+        if hoy < self.fecha_inicio:
+            return Periodo.FUTURO
+        if hoy > self.fecha_fin:
+            return Periodo.TERMINADO
+        return Periodo.ACTIVO
+
+    def esta_en_periodo(self, periodo):
+        return self.periodo() == periodo
+
+    def indice_salud(self):
+        """Promedio provisional del avance de las técnicas activas (0-100).
+
+        La fórmula definitiva corresponde a HU-14 (sin diseño). Ver D8.
+        """
+        avances = list(
+            self.seguimientos_tecnicas.filter(activa=True).values_list(
+                'porcentaje_avance', flat=True
+            )
+        )
+        if not avances:
+            return None
+        return round(sum(avances) / len(avances), 1)
+
+    # --- Equipo ---------------------------------------------------------
+
+    def equipo_activo(self):
+        return self.equipo.filter(activo=True).select_related('persona')
+
+    def miembros_todos(self):
+        return self.equipo.select_related('persona').order_by(
+            '-activo', 'persona__nombre'
         )
 
-    def ultima_fecha(self):
+    def agregar_miembro(self, persona, rol):
+        miembro, creado = self.equipo.get_or_create(
+            persona=persona,
+            defaults={'rol': rol},
+        )
+        if not creado:
+            miembro.rol = rol
+            miembro.activo = True
+            miembro.full_clean()
+            miembro.save(update_fields=['rol', 'activo'])
+        return miembro
+
+    # --- Técnicas -------------------------------------------------------
+
+    def seguimientos(self):
+        """Seguimientos de técnicas del proyecto (``hu6_clases.puml``)."""
+        return self.seguimientos_tecnicas.all()
+
+    def seguimientos_activos(self):
+        return self.seguimientos_tecnicas.filter(activa=True).select_related(
+            'tecnica'
+        )
+
+    # --- Métricas -------------------------------------------------------
+
+    def historial_modelos(self):
+        return self.modelos_aplicados.select_related(
+            'modelo_calidad'
+        ).order_by('-fecha_aplicacion', '-pk')
+
+    def modelo_aplicado_vigente(self):
         return (
-            self.obtener_proyectos()
-            .values_list('fecha_inicio', flat=True)
+            self.modelos_aplicados.filter(vigente=True)
+            .select_related('modelo_calidad')
             .first()
         )
 
-    @classmethod
-    def obtener_recientes(cls):
-        periodos = [cls(nombre) for nombre in cls.ESTADOS]
+    def revisiones(self):
+        """Revisiones del proyecto vía ModeloAplicado -> MetricaAplicada."""
+        from apps.modelos.models import RevisionMetrica
 
-        def clave(periodo):
-            fecha = periodo.ultima_fecha()
-            return (fecha is not None, fecha or date.min)
+        return RevisionMetrica.objects.filter(
+            metrica_aplicada__modelo_aplicado__proyecto=self
+        ).select_related(
+            'metrica_aplicada__metrica',
+            'miembro_proyecto__persona',
+        )
 
-        return sorted(periodos, key=clave, reverse=True)
+    def tiene_mediciones(self):
+        return self.revisiones().exists()
+
+    @transaction.atomic
+    def aplicar_modelo(self, modelo_calidad):
+        """Aplica un modelo predefinido y crea su instantánea (HU-02)."""
+        from apps.modelos.models import ModeloAplicado
+
+        if not modelo_calidad.modelo_metricas.exists():
+            raise ValidationError(
+                {
+                    'modelo_calidad': (
+                        'Este modelo no tiene métricas configuradas.'
+                    )
+                }
+            )
+
+        vigente = self.modelo_aplicado_vigente()
+        if vigente is not None and vigente.modelo_calidad_id == modelo_calidad.pk:
+            return vigente
+        if vigente is not None:
+            vigente.cerrar()
+
+        aplicado = ModeloAplicado.objects.create(
+            proyecto=self,
+            modelo_calidad=modelo_calidad,
+        )
+        aplicado.crear_instantanea()
+        return aplicado
+
+    def cambiar_modelo(self, modelo_calidad):
+        return self.aplicar_modelo(modelo_calidad)
 
 
 class Persona(models.Model):
@@ -109,7 +234,7 @@ class Persona(models.Model):
 
 class MiembroProyecto(models.Model):
     proyecto = models.ForeignKey(
-        'tecnicas.Proyecto',
+        Proyecto,
         on_delete=models.CASCADE,
         related_name='equipo',
     )
@@ -155,7 +280,7 @@ class MiembroProyecto(models.Model):
 
 class RegistroSalud(models.Model):
     proyecto = models.ForeignKey(
-        'tecnicas.Proyecto',
+        Proyecto,
         on_delete=models.CASCADE,
         related_name='registros_salud',
     )
@@ -179,10 +304,7 @@ class RegistroSalud(models.Model):
 
 
 def registrar_salud(proyecto):
-    """Guarda o refresca el índice de salud del proyecto para hoy.
-
-    Devuelve ``None`` cuando el proyecto todavía no tiene mediciones.
-    """
+    """Guarda o refresca el índice de salud del proyecto para hoy."""
     indice = proyecto.indice_salud()
     if indice is None:
         return None

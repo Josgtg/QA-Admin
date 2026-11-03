@@ -7,12 +7,19 @@
     <div>
         <h2>Catálogo de Modelos de Calidad</h2>
         <p class="subtitle">
-            Modelos predefinidos con sus características, métricas y metas.
+            Consulta detallada: características, métricas, rango admisible y
+            umbral de cada modelo predefinido.
         </p>
     </div>
-    <span class="head-muted">
-        {{ modelos|length }} modelo{{ modelos|length|pluralize:"s" }} predefinido{{ modelos|length|pluralize:"s" }}
-    </span>
+    <div class="actions">
+        <span class="head-muted">
+            {{ modelos|length }} modelo{{ modelos|length|pluralize:"s" }} predefinido{{ modelos|length|pluralize:"s" }}
+        </span>
+        <a class="btn btn-outline" href="{% url 'modelos:modelo_proyecto' %}">
+            <svg class="icon icon-sm"><use href="#i-layers"></use></svg>
+            Modelo del proyecto
+        </a>
+    </div>
 </div>
 
 {% for modelo in modelos %}
@@ -23,7 +30,7 @@
             <p class="model-description">{{ modelo.descripcion }}</p>
         </div>
         <span class="head-muted">
-            {{ modelo.caracteristicas.count }} característica{{ modelo.caracteristicas.count|pluralize:"s" }}
+            {{ modelo.obtener_modelo_metricas|length }} métrica{{ modelo.obtener_modelo_metricas|length|pluralize:"s" }}
         </span>
     </div>
     <div class="table-wrap model-table-wrap">
@@ -32,26 +39,40 @@
                 <tr>
                     <th>Característica</th>
                     <th>Métrica</th>
+                    <th>Descripción</th>
                     <th>Unidad</th>
-                    <th>Meta</th>
+                    <th>Rango</th>
+                    <th>Umbral</th>
                 </tr>
             </thead>
             <tbody>
-                {% for caracteristica in modelo.obtener_caracteristicas %}
-                {% for metrica in caracteristica.obtener_metricas %}
+                {% for mm in modelo.obtener_modelo_metricas %}
                 <tr>
-                    <td><div class="cell-title">{{ caracteristica.nombre }}</div></td>
                     <td>
-                        <div class="cell-title">{{ metrica.nombre }}</div>
-                        <div class="cell-sub">{{ metrica.descripcion }}</div>
+                        <div class="cell-title">{{ mm.metrica.caracteristica.nombre }}</div>
                     </td>
-                    <td>{{ metrica.unidad }}</td>
                     <td>
-                        {% if metrica.tipo_umbral == 'MINIMO' %}≥{% else %}≤{% endif %}
-                        {{ metrica.meta|floatformat:'-2' }}
+                        <div class="cell-title">{{ mm.metrica.nombre }}</div>
+                        {% if not mm.activa %}
+                        <div class="cell-sub">Inactiva</div>
+                        {% endif %}
+                    </td>
+                    <td>{{ mm.metrica.descripcion }}</td>
+                    <td>{{ mm.metrica.unidad }}</td>
+                    <td>
+                        {% if mm.metrica.valor_min is not None %}{{ mm.metrica.valor_min|floatformat:'-2' }}{% else %}—{% endif %}
+                        –
+                        {% if mm.metrica.valor_max is not None %}{{ mm.metrica.valor_max|floatformat:'-2' }}{% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if mm.tipo_umbral == 'MINIMO' %}≥{% else %}≤{% endif %}
+                        {{ mm.umbral|floatformat:'-2' }}
                     </td>
                 </tr>
-                {% endfor %}
+                {% empty %}
+                <tr>
+                    <td colspan="6">Este modelo no tiene métricas configuradas.</td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>

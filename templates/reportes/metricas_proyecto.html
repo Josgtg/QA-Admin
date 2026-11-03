@@ -6,25 +6,124 @@
 <div class="page-head">
     <div>
         <h2>Métricas · {{ proyecto.nombre }}</h2>
-        <p class="subtitle">Seguimiento de métricas de calidad del proyecto</p>
+        <p class="subtitle">
+            {% if aplicado %}
+            Modelo aplicado: <strong>{{ aplicado.modelo_calidad.nombre }}</strong>
+            desde {{ aplicado.fecha_aplicacion|date:"d/m/Y" }}
+            {% else %}
+            Este proyecto todavía no tiene un modelo de calidad aplicado.
+            {% endif %}
+        </p>
     </div>
     <div class="actions">
         <a class="btn btn-outline" href="{% url 'reportes:lista' %}">
             <svg class="icon icon-sm"><use href="#i-projects"></use></svg>
             Volver a la lista
         </a>
-        <a class="btn btn-primary" href="{% url 'reportes:tablero' proyecto.pk %}">
-            <svg class="icon icon-sm"><use href="#i-eye"></use></svg>
-            Ir al tablero
+        <a class="btn btn-primary" href="{% url 'reportes:aplicar_modelo' proyecto.pk %}">
+            <svg class="icon icon-sm"><use href="#i-layers"></use></svg>
+            {% if aplicado %}Cambiar modelo{% else %}Aplicar modelo{% endif %}
         </a>
     </div>
 </div>
 
-<section class="card">
-    <div class="empty-state">
-        <svg class="icon empty-icon"><use href="#i-metrics"></use></svg>
-        <h3>Sin métricas registradas</h3>
-        <p>Este proyecto todavía no tiene métricas configuradas ni mediciones.</p>
+{% if messages %}
+<div class="flash-stack">
+    {% for message in messages %}
+    <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if not aplicado %}
+<section class="card empty-state">
+    <svg class="icon empty-icon"><use href="#i-metrics"></use></svg>
+    <h3>Sin métricas configuradas</h3>
+    <p>
+        Aplica un modelo de calidad al proyecto para ver aquí sus métricas y
+        registrar mediciones.
+    </p>
+    <div class="detail-actions">
+        <a class="btn btn-primary" href="{% url 'reportes:aplicar_modelo' proyecto.pk %}">
+            Aplicar modelo
+        </a>
     </div>
 </section>
+{% else %}
+
+<section class="card">
+    <div class="card-head">
+        <h3>Métricas del modelo vigente</h3>
+        <span class="head-muted">
+            {{ metricas|length }} métrica{{ metricas|length|pluralize:"s" }}
+        </span>
+    </div>
+
+    {% if metricas %}
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Característica</th>
+                    <th>Métrica</th>
+                    <th>Último valor</th>
+                    <th>Umbral</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fila in metricas %}
+                <tr>
+                    <td><div class="cell-title">{{ fila.metrica.caracteristica.nombre }}</div></td>
+                    <td>
+                        <div class="cell-title">{{ fila.metrica.nombre }}</div>
+                        <div class="cell-sub">{{ fila.metrica.unidad }}</div>
+                    </td>
+                    <td>
+                        {% if fila.valor is not None %}
+                        {{ fila.valor|floatformat:'-2' }}
+                        {% else %}
+                        <span class="health-empty">Sin medición</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if fila.instantanea.tipo_umbral == 'MINIMO' %}≥{% else %}≤{% endif %}
+                        {{ fila.instantanea.umbral|floatformat:'-2' }}
+                    </td>
+                    <td>
+                        {% if fila.valor is None %}
+                        <span class="status gray">Sin medición</span>
+                        {% elif fila.aceptada %}
+                        <span class="status green">Cumple</span>
+                        {% else %}
+                        <span class="status gray">No cumple</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions-cell">
+                        <a class="icon-btn"
+                           href="{% url 'reportes:registrar_revision' proyecto.pk fila.metrica.pk %}"
+                           title="Registrar revisión"
+                           aria-label="Registrar revisión de {{ fila.metrica.nombre }}">
+                            <svg class="icon"><use href="#i-plus"></use></svg>
+                        </a>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="6">
+                        <details>
+                            <summary class="muted">Historial de {{ fila.metrica.nombre }}</summary>
+                            {% include 'modelos/_historial_metricas.html' with historial=fila.revisiones metrica=fila.metrica %}
+                        </details>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-row">Este modelo no tiene métricas configuradas.</div>
+    {% endif %}
+</section>
+{% endif %}
 {% endblock %}

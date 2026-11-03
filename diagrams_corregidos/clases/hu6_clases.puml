@@ -204,8 +204,8 @@ note top of ListaProyectosView
   el panel muestra nombre, salud,
   fechas y equipo_activo() sin
   salir de la lista. Acciones del
-  panel: consultar (tablero),
-  editar equipo. Acción global:
+  panel: consultar (tablero), editar,
+  técnicas y métricas. Acción global:
   crear proyecto.
   indice_salud() no tiene fórmula
   definida aquí.

@@ -1,33 +1,75 @@
+"""Seed de los 4 modelos de calidad predefinidos (HU-03).
+
+Escrito directamente sobre el esquema final: ``Caracteristica`` es un catálogo
+global (una sola fila por nombre), la meta vive en ``ModeloMetrica`` y el rango
+admisible en ``Metrica.valor_min``/``valor_max`` (que se dejan en ``NULL``,
+H3-1).
+
+Sustituye a la migración incremental que convertía ``Metrica.meta``.
+"""
+
 from django.db import migrations
 
+CATALOGO_CARACTERISTICAS = {
+    'Corrección': 'El software hace lo que piden los requisitos.',
+    'Fiabilidad': (
+        'El software funciona de forma fiable y disponible cuando se necesita.'
+    ),
+    'Usabilidad': 'El software es fácil de usar y de aprender.',
+    'Mantenibilidad': 'El código se corrige y mantiene con poco esfuerzo.',
+    'Portabilidad': 'El software funciona en distintos entornos.',
+    'Eficiencia': 'El software aprovecha bien los recursos.',
+    'Comprensibilidad': 'El código se entiende con facilidad.',
+    'Modificabilidad': 'El código se cambia con facilidad.',
+    'Funcionalidad': 'El software cubre lo que se pidió.',
+    'Rendimiento': 'El software responde rápido.',
+    'Soporte': 'El software se corrige y mantiene con facilidad.',
+    'Adecuación funcional': 'El software cumple los requisitos.',
+    'Seguridad': 'El software protege los datos.',
+}
+
+# (nombre, descripción, [(característica, métrica, descripción, unidad,
+#                          umbral, tipo_umbral)])
 MODELOS_BASE = [
     (
         'McCall',
         'Modelo de 1977 que agrupa la calidad en operación, revisión y '
         'transición del producto.',
         [
-            ('Corrección', 'El software hace lo que piden los requisitos.', [
-                ('Requisitos implementados correctamente',
-                 'Requisitos que pasan sus pruebas entre requisitos totales.',
-                 '%', 90, 'MINIMO'),
-            ]),
-            ('Fiabilidad', 'El software funciona sin fallar.', [
-                ('Defectos críticos abiertos',
-                 'Defectos críticos sin corregir al cierre del periodo.',
-                 'defectos', 0, 'MAXIMO'),
-            ]),
-            ('Usabilidad', 'El software es fácil de aprender y usar.', [
-                ('Tareas completadas sin ayuda',
-                 'Tareas que el usuario termina sin ayuda entre tareas '
-                 'probadas.',
-                 '%', 80, 'MINIMO'),
-            ]),
-            ('Mantenibilidad', 'Los defectos se corrigen con poco esfuerzo.', [
-                ('Tiempo medio de corrección',
-                 'Horas promedio desde que se reporta un defecto hasta que '
-                 'se corrige.',
-                 'horas', 24, 'MAXIMO'),
-            ]),
+            (
+                'Corrección',
+                'Requisitos implementados correctamente',
+                'Requisitos que pasan sus pruebas entre requisitos totales.',
+                '%',
+                90,
+                'MINIMO',
+            ),
+            (
+                'Fiabilidad',
+                'Defectos críticos abiertos',
+                'Defectos críticos sin corregir al cierre del periodo.',
+                'defectos',
+                0,
+                'MAXIMO',
+            ),
+            (
+                'Usabilidad',
+                'Tareas completadas sin ayuda',
+                'Tareas que el usuario termina sin ayuda entre tareas '
+                'probadas.',
+                '%',
+                80,
+                'MINIMO',
+            ),
+            (
+                'Mantenibilidad',
+                'Tiempo medio de corrección',
+                'Horas promedio desde que se reporta un defecto hasta que '
+                'se corrige.',
+                'horas',
+                24,
+                'MAXIMO',
+            ),
         ],
     ),
     (
@@ -35,27 +77,39 @@ MODELOS_BASE = [
         'Modelo de 1978 que mide la utilidad del producto, su '
         'mantenibilidad y su portabilidad.',
         [
-            ('Portabilidad', 'El software funciona en distintos entornos.', [
-                ('Navegadores soportados',
-                 'Navegadores donde la aplicación funciona entre navegadores '
-                 'probados.',
-                 '%', 100, 'MINIMO'),
-            ]),
-            ('Eficiencia', 'El software responde rápido.', [
-                ('Tiempo de respuesta',
-                 'Segundos promedio que tarda una pantalla en cargar.',
-                 'segundos', 2, 'MAXIMO'),
-            ]),
-            ('Comprensibilidad', 'El código se entiende con facilidad.', [
-                ('Funciones documentadas',
-                 'Funciones con docstring entre funciones públicas.',
-                 '%', 90, 'MINIMO'),
-            ]),
-            ('Modificabilidad', 'El código se cambia con facilidad.', [
-                ('Complejidad ciclomática máxima',
-                 'Complejidad más alta encontrada en una función.',
-                 'puntos', 10, 'MAXIMO'),
-            ]),
+            (
+                'Portabilidad',
+                'Navegadores soportados',
+                'Navegadores donde la aplicación funciona entre navegadores '
+                'probados.',
+                '%',
+                100,
+                'MINIMO',
+            ),
+            (
+                'Eficiencia',
+                'Tiempo de respuesta',
+                'Segundos promedio que tarda una pantalla en cargar.',
+                'segundos',
+                2,
+                'MAXIMO',
+            ),
+            (
+                'Comprensibilidad',
+                'Funciones documentadas',
+                'Funciones con docstring entre funciones públicas.',
+                '%',
+                90,
+                'MINIMO',
+            ),
+            (
+                'Modificabilidad',
+                'Complejidad ciclomática máxima',
+                'Complejidad más alta encontrada en una función.',
+                'puntos',
+                10,
+                'MAXIMO',
+            ),
         ],
     ),
     (
@@ -63,32 +117,47 @@ MODELOS_BASE = [
         'Modelo de Hewlett-Packard: funcionalidad, usabilidad, fiabilidad, '
         'rendimiento y soporte.',
         [
-            ('Funcionalidad', 'El software cubre lo que se pidió.', [
-                ('Criterios de aceptación cumplidos',
-                 'Criterios que pasan entre criterios de las HU.',
-                 '%', 100, 'MINIMO'),
-            ]),
-            ('Usabilidad', 'Los usuarios están conformes con el uso.', [
-                ('Satisfacción de usuarios',
-                 'Calificación promedio de una encuesta del 1 al 5.',
-                 'puntos', 4, 'MINIMO'),
-            ]),
-            ('Fiabilidad', 'El software está disponible cuando se necesita.', [
-                ('Disponibilidad',
-                 'Tiempo en funcionamiento entre tiempo total.',
-                 '%', 99, 'MINIMO'),
-            ]),
-            ('Rendimiento', 'El software responde rápido.', [
-                ('Tiempo de respuesta',
-                 'Segundos promedio que tarda una pantalla en cargar.',
-                 'segundos', 2, 'MAXIMO'),
-            ]),
-            ('Soporte', 'El software se corrige y mantiene con facilidad.', [
-                ('Tiempo medio de corrección',
-                 'Horas promedio desde que se reporta un defecto hasta que '
-                 'se corrige.',
-                 'horas', 48, 'MAXIMO'),
-            ]),
+            (
+                'Funcionalidad',
+                'Criterios de aceptación cumplidos',
+                'Criterios que pasan entre criterios de las HU.',
+                '%',
+                100,
+                'MINIMO',
+            ),
+            (
+                'Usabilidad',
+                'Satisfacción de usuarios',
+                'Calificación promedio de una encuesta del 1 al 5.',
+                'puntos',
+                4,
+                'MINIMO',
+            ),
+            (
+                'Fiabilidad',
+                'Disponibilidad',
+                'Tiempo en funcionamiento entre tiempo total.',
+                '%',
+                99,
+                'MINIMO',
+            ),
+            (
+                'Rendimiento',
+                'Tiempo de respuesta',
+                'Segundos promedio que tarda una pantalla en cargar.',
+                'segundos',
+                2,
+                'MAXIMO',
+            ),
+            (
+                'Soporte',
+                'Tiempo medio de corrección',
+                'Horas promedio desde que se reporta un defecto hasta que '
+                'se corrige.',
+                'horas',
+                48,
+                'MAXIMO',
+            ),
         ],
     ),
     (
@@ -96,32 +165,47 @@ MODELOS_BASE = [
         'Estándar internacional que define las características de calidad '
         'de un producto de software.',
         [
-            ('Adecuación funcional', 'El software cumple los requisitos.', [
-                ('Criterios de aceptación cumplidos',
-                 'Criterios que pasan entre criterios de las HU.',
-                 '%', 100, 'MINIMO'),
-            ]),
-            ('Fiabilidad', 'El software funciona sin errores.', [
-                ('Pruebas aprobadas',
-                 'Pruebas que pasan entre pruebas realizadas.',
-                 '%', 100, 'MINIMO'),
-            ]),
-            ('Mantenibilidad', 'El código sigue el estándar del equipo.', [
-                ('Cumplimiento del estándar de código',
-                 'Ítems que cumplen entre ítems del checklist de revisión de '
-                 'código.',
-                 '%', 100, 'MINIMO'),
-            ]),
-            ('Usabilidad', 'El usuario entiende qué corregir.', [
-                ('Errores con mensaje claro',
-                 'Datos inválidos con mensaje entre datos inválidos probados.',
-                 '%', 100, 'MINIMO'),
-            ]),
-            ('Seguridad', 'El software protege los datos.', [
-                ('Vulnerabilidades abiertas',
-                 'Vulnerabilidades sin corregir al cierre del periodo.',
-                 'vulnerabilidades', 0, 'MAXIMO'),
-            ]),
+            (
+                'Adecuación funcional',
+                'Criterios de aceptación cumplidos',
+                'Criterios que pasan entre criterios de las HU.',
+                '%',
+                100,
+                'MINIMO',
+            ),
+            (
+                'Fiabilidad',
+                'Pruebas aprobadas',
+                'Pruebas que pasan entre pruebas realizadas.',
+                '%',
+                100,
+                'MINIMO',
+            ),
+            (
+                'Mantenibilidad',
+                'Cumplimiento del estándar de código',
+                'Ítems que cumplen entre ítems del checklist de revisión de '
+                'código.',
+                '%',
+                100,
+                'MINIMO',
+            ),
+            (
+                'Usabilidad',
+                'Errores con mensaje claro',
+                'Datos inválidos con mensaje entre datos inválidos probados.',
+                '%',
+                100,
+                'MINIMO',
+            ),
+            (
+                'Seguridad',
+                'Vulnerabilidades abiertas',
+                'Vulnerabilidades sin corregir al cierre del periodo.',
+                'vulnerabilidades',
+                0,
+                'MAXIMO',
+            ),
         ],
     ),
 ]
@@ -131,42 +215,57 @@ def crear_modelos_base(apps, schema_editor):
     ModeloCalidad = apps.get_model('modelos', 'ModeloCalidad')
     Caracteristica = apps.get_model('modelos', 'Caracteristica')
     Metrica = apps.get_model('modelos', 'Metrica')
+    ModeloMetrica = apps.get_model('modelos', 'ModeloMetrica')
 
-    for nombre, descripcion, caracteristicas in MODELOS_BASE:
-        modelo = ModeloCalidad.objects.create(
+    caracteristicas = {}
+    for nombre, descripcion in CATALOGO_CARACTERISTICAS.items():
+        caracteristica, _ = Caracteristica.objects.get_or_create(
             nombre=nombre,
-            descripcion=descripcion,
-            predefinido=True,
+            defaults={'descripcion': descripcion},
         )
-        for nombre_car, descripcion_car, metricas in caracteristicas:
-            caracteristica = Caracteristica.objects.create(
-                modelo=modelo,
-                nombre=nombre_car,
-                descripcion=descripcion_car,
+        caracteristicas[nombre] = caracteristica
+
+    for nombre_modelo, descripcion, filas in MODELOS_BASE:
+        modelo, _ = ModeloCalidad.objects.get_or_create(
+            nombre=nombre_modelo,
+            defaults={'descripcion': descripcion, 'predefinido': True},
+        )
+        for (
+            nombre_caracteristica,
+            nombre_metrica,
+            descripcion_metrica,
+            unidad,
+            umbral,
+            tipo_umbral,
+        ) in filas:
+            caracteristica = caracteristicas[nombre_caracteristica]
+            metrica, _ = Metrica.objects.get_or_create(
+                caracteristica=caracteristica,
+                nombre=nombre_metrica,
+                defaults={
+                    'descripcion': descripcion_metrica,
+                    'unidad': unidad,
+                },
             )
-            for nombre_met, descripcion_met, unidad, meta, tipo in metricas:
-                Metrica.objects.create(
-                    caracteristica=caracteristica,
-                    nombre=nombre_met,
-                    descripcion=descripcion_met,
-                    unidad=unidad,
-                    meta=meta,
-                    tipo_umbral=tipo,
-                )
-
-
-def borrar_modelos_base(apps, schema_editor):
-    ModeloCalidad = apps.get_model('modelos', 'ModeloCalidad')
-    nombres = [nombre for nombre, _, _ in MODELOS_BASE]
-    ModeloCalidad.objects.filter(nombre__in=nombres, predefinido=True).delete()
+            ModeloMetrica.objects.get_or_create(
+                modelo_calidad=modelo,
+                metrica=metrica,
+                defaults={
+                    'umbral': umbral,
+                    'tipo_umbral': tipo_umbral,
+                    'activa': True,
+                },
+            )
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('modelos', '0001_initial'),
     ]
 
     operations = [
-        migrations.RunPython(crear_modelos_base, borrar_modelos_base),
+        migrations.RunPython(
+            crear_modelos_base,
+            migrations.RunPython.noop,
+        ),
     ]

@@ -23,7 +23,7 @@ UI -> View: get(req: HttpRequest)
 activate View
 
 alt "con filtro de fechas o periodo"
-    View -> Proyecto: filtrar_por_fecha(fecha_inicio, fecha_fin)
+    View -> Proyecto: esta_en_periodo(periodo)
     activate Proyecto
     Proyecto --> View: List<Proyecto> (periodo derivado: futuro / activo / terminado)
     deactivate Proyecto

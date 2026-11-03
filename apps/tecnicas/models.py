@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import models
 from django.utils import timezone
 
 
@@ -16,6 +16,8 @@ class TipoControl(models.TextChoices):
 
 
 class CatalogoTQA(models.Model):
+    """Agrupador opcional de técnicas (H4-2=a: se conserva sin UI nueva)."""
+
     nombre = models.CharField(max_length=200, unique=True)
     descripcion = models.TextField(blank=True)
 
@@ -59,6 +61,10 @@ class TecnicaQA(models.Model):
     def obtener_pasos(self):
         return self.pasos.all()
 
+    def es_placeholder(self):
+        """Contenido provisional mientras no exista el texto definitivo."""
+        return self.descripcion.startswith('[PENDIENTE]')
+
 
 class Paso(models.Model):
     tecnica = models.ForeignKey(
@@ -85,115 +91,13 @@ class Paso(models.Model):
         return f'{self.orden}. {self.instruccion[:60]}'
 
 
-class Proyecto(models.Model):
-    nombre = models.CharField(max_length=200)
-    fecha_inicio = models.DateField()
-    fecha_fin = models.DateField()
-
-    class Meta:
-        verbose_name = 'proyecto'
-        verbose_name_plural = 'proyectos'
-        ordering = ['nombre']
-
-    def __str__(self):
-        return self.nombre
-
-    def clean(self):
-        if (
-            self.fecha_inicio
-            and self.fecha_fin
-            and self.fecha_fin < self.fecha_inicio
-        ):
-            raise ValidationError(
-                {
-                    'fecha_fin': (
-                        'La fecha de fin no puede ser anterior a la de inicio.'
-                    )
-                }
-            )
-
-    def periodo(self):
-        """Estado derivado de las fechas, según e-r.puml."""
-        if not self.fecha_inicio or not self.fecha_fin:
-            return 'Sin periodo'
-        hoy = timezone.localdate()
-        if hoy < self.fecha_inicio:
-            return 'Futuro'
-        if hoy > self.fecha_fin:
-            return 'Terminado'
-        return 'Activo'
-
-    def indice_salud(self):
-        """Promedio provisional del avance de las técnicas activas (0-100)."""
-        avances = list(
-            self.seguimientos.filter(activa=True).values_list(
-                'porcentaje_avance', flat=True
-            )
-        )
-        if not avances:
-            return None
-        return round(sum(avances) / len(avances), 1)
-
-    def equipo_activo(self):
-        return self.equipo.filter(activo=True).select_related('persona')
-
-    def miembros_todos(self):
-        return self.equipo.select_related('persona').order_by(
-            '-activo', 'persona__nombre'
-        )
-
-    def agregar_miembro(self, persona, rol):
-        miembro, creado = self.equipo.get_or_create(
-            persona=persona,
-            defaults={'rol': rol},
-        )
-        if not creado:
-            miembro.rol = rol
-            miembro.activo = True
-            miembro.full_clean()
-            miembro.save(update_fields=['rol', 'activo'])
-        return miembro
-
-    def seguimientos_activos(self):
-        return self.seguimientos.filter(activa=True).select_related('tecnica')
-
-    @transaction.atomic
-    def seguir_tecnica(self, tqa):
-        seguimiento, _ = SeguimientoTecnica.objects.get_or_create(
-            proyecto=self,
-            tecnica=tqa,
-        )
-        if not seguimiento.activa:
-            seguimiento.activa = True
-            seguimiento.save(update_fields=['activa'])
-        pasos_registrados = set(
-            seguimiento.pasos.values_list('paso_id', flat=True)
-        )
-        for paso in tqa.obtener_pasos():
-            if paso.pk not in pasos_registrados:
-                SeguimientoPaso.objects.create(
-                    seguimiento=seguimiento,
-                    paso=paso,
-                )
-        seguimiento.calcular_avance()
-        return seguimiento
-
-    def remover_tecnica(self, seguimiento_id):
-        seguimiento = self.seguimientos.filter(pk=seguimiento_id).first()
-        if not seguimiento:
-            return
-        if seguimiento.tiene_evidencias_registradas():
-            seguimiento.activa = False
-            seguimiento.save(update_fields=['activa'])
-        else:
-            seguimiento.delete()
-
-
 class SeguimientoTecnica(models.Model):
+    """Técnica elegida dentro de un proyecto (``hu5_clases.puml``)."""
+
     proyecto = models.ForeignKey(
-        Proyecto,
+        'reportes.Proyecto',
         on_delete=models.CASCADE,
-        related_name='seguimientos',
+        related_name='seguimientos_tecnicas',
     )
     tecnica = models.ForeignKey(
         TecnicaQA,
@@ -206,6 +110,7 @@ class SeguimientoTecnica(models.Model):
     class Meta:
         verbose_name = 'seguimiento de técnica'
         verbose_name_plural = 'seguimientos de técnicas'
+        ordering = ['tecnica__nombre']
         constraints = [
             models.UniqueConstraint(
                 fields=['proyecto', 'tecnica'],
@@ -228,6 +133,15 @@ class SeguimientoTecnica(models.Model):
             self.save(update_fields=['porcentaje_avance'])
         return self.porcentaje_avance
 
+    def desactivar(self):
+        """Baja lógica: conserva evidencias y pasos."""
+        self.activa = False
+        self.save(update_fields=['activa'])
+
+    def reactivar(self):
+        self.activa = True
+        self.save(update_fields=['activa'])
+
 
 class SeguimientoPaso(models.Model):
     seguimiento = models.ForeignKey(
@@ -243,7 +157,6 @@ class SeguimientoPaso(models.Model):
     completado = models.BooleanField(default=False)
     comentario = models.TextField(blank=True)
     fecha_completado = models.DateTimeField(null=True, blank=True)
-    autor = models.CharField(max_length=150, blank=True)
 
     class Meta:
         verbose_name = 'seguimiento de paso'
@@ -259,38 +172,76 @@ class SeguimientoPaso(models.Model):
     def __str__(self):
         return f'{self.seguimiento} - {self.paso}'
 
-    def agregar_evidencia(self, evidencia):
-        evidencia.seguimiento_paso = self
-        evidencia.save(update_fields=['seguimiento_paso'])
-        return evidencia
+    def esta_completado(self):
+        return self.completado
 
-    def marcar_completado(self, autor=''):
+    def tiene_evidencia(self):
+        if not self.pk:
+            return False
+        return Evidencia.objects.filter(seguimiento_paso_id=self.pk).exists()
+
+    def marcar_completado(self, comentario=''):
+        """Marca el paso como completado; exige evidencia registrada."""
+        if not self.tiene_evidencia():
+            raise ValidationError(
+                'No se puede completar un paso sin evidencia.'
+            )
         self.completado = True
         self.fecha_completado = timezone.now()
-        if autor:
-            self.autor = autor
-        self.save(update_fields=['completado', 'fecha_completado', 'autor'])
+        if comentario:
+            self.comentario = comentario
+        self.save(
+            update_fields=['completado', 'fecha_completado', 'comentario']
+        )
         self.seguimiento.calcular_avance()
         return self
 
 
 class Evidencia(models.Model):
+    """Evidencia de un paso: enlace o archivo, con autor del proyecto."""
+
     seguimiento_paso = models.OneToOneField(
         SeguimientoPaso,
         on_delete=models.CASCADE,
         related_name='evidencia',
-        null=True,
-        blank=True,
     )
-    url_archivo = models.URLField(max_length=500)
-    tipo = models.CharField(max_length=20, choices=TipoControl.choices)
+    miembro_proyecto = models.ForeignKey(
+        'reportes.MiembroProyecto',
+        on_delete=models.CASCADE,
+        related_name='evidencias',
+    )
+    enlace = models.URLField(max_length=500, blank=True)
+    archivo = models.FileField(upload_to='evidencias/pasos/', blank=True)
     fecha_registro = models.DateTimeField(auto_now_add=True)
-    autor = models.CharField(max_length=150)
 
     class Meta:
         verbose_name = 'evidencia'
         verbose_name_plural = 'evidencias'
         ordering = ['-fecha_registro']
+        constraints = [
+            models.CheckConstraint(
+                condition=(~models.Q(enlace='') | ~models.Q(archivo='')),
+                name='evidencia_con_enlace_o_archivo',
+            ),
+        ]
 
     def __str__(self):
-        return self.url_archivo
+        return self.enlace or (self.archivo.name if self.archivo else '')
+
+    def tiene_enlace_o_archivo(self):
+        return bool(self.enlace or self.archivo)
+
+    def clean(self):
+        errores = {}
+        if not self.tiene_enlace_o_archivo():
+            errores['enlace'] = (
+                'Adjunta un enlace o un archivo como evidencia.'
+            )
+        if self.miembro_proyecto_id and self.seguimiento_paso_id:
+            proyecto_paso = self.seguimiento_paso.seguimiento.proyecto_id
+            if self.miembro_proyecto.proyecto_id != proyecto_paso:
+                errores['miembro_proyecto'] = (
+                    'El autor debe pertenecer al proyecto del paso.'
+                )
+        if errores:
+            raise ValidationError(errores)

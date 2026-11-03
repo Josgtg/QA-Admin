@@ -1,0 +1,37 @@
+{% comment %}
+Tarjeta del catálogo de técnicas (HU-04), con checkbox de selección (H4-4=b).
+{% endcomment %}
+<section class="card model-card">
+    <div class="card-head">
+        <div>
+            <h3>
+                {% if not sin_proyecto %}
+                <input class="select-input" type="checkbox" name="tecnicas"
+                       value="{{ tecnica.pk }}" id="tecnica-{{ tecnica.pk }}"
+                       {% if tecnica.pk in seleccionadas_ids %}checked{% endif %}>
+                {% endif %}
+                <label for="tecnica-{{ tecnica.pk }}">{{ tecnica.nombre }}</label>
+            </h3>
+            <p class="model-description">{{ tecnica.descripcion }}</p>
+        </div>
+        {% if tecnica.es_placeholder %}
+        <span class="status gray">Por definir</span>
+        {% endif %}
+    </div>
+
+    <p class="muted">
+        {{ tecnica.get_dimension_display }} ·
+        {{ tecnica.get_tipo_control_display }} ·
+        {{ tecnica.pasos.count }} paso{{ tecnica.pasos.count|pluralize:"s" }}
+    </p>
+
+    <div class="detail-actions">
+        <a class="btn btn-outline btn-sm" href="{% url 'tecnicas:detalle' tecnica.pk %}">
+            <svg class="icon icon-sm"><use href="#i-eye"></use></svg>
+            Ver detalle
+        </a>
+        {% if tecnica.pk in seleccionadas_ids %}
+        <span class="status green">En seguimiento</span>
+        {% endif %}
+    </div>
+</section>

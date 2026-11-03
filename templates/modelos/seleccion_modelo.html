@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% block title %}Modelo de calidad · {{ proyecto.nombre }} · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <a class="back-link" href="{% url 'reportes:tablero' proyecto.pk %}">
+            <svg class="icon icon-xs"><use href="#i-arrow-left"></use></svg>
+            Volver al tablero
+        </a>
+        <h2>Modelo de calidad del proyecto</h2>
+        <p class="subtitle">
+            Proyecto <strong>{{ proyecto.nombre }}</strong> ·
+            {% if vigente %}
+            modelo vigente <strong>{{ vigente.modelo_calidad.nombre }}</strong>
+            {% else %}
+            sin modelo aplicado
+            {% endif %}
+        </p>
+    </div>
+    <div class="actions">
+        <a class="btn btn-outline" href="{% url 'modelos:catalogo' %}">
+            <svg class="icon icon-sm"><use href="#i-layers"></use></svg>
+            Ver catálogo de modelos
+        </a>
+    </div>
+</div>
+
+{% if messages %}
+<div class="flash-stack">
+    {% for message in messages %}
+    <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if error %}
+<div class="flash-stack">
+    <div class="flash flash-error">{{ error }}</div>
+</div>
+{% endif %}
+
+{% if requiere_confirmacion %}
+<section class="card section-gap">
+    <div class="card-head">
+        <div>
+            <h3>Confirmar cambio de modelo</h3>
+            <p class="muted">
+                El proyecto ya tiene mediciones registradas. Cambiar a
+                «{{ modelo.nombre }}» cierra la aplicación vigente y crea una
+                nueva instantánea; las revisiones anteriores se conservan.
+            </p>
+        </div>
+    </div>
+    <div class="detail-actions">
+        <form method="post" action="{% url 'reportes:aplicar_modelo' proyecto.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="modelo_id" value="{{ modelo.pk }}">
+            <input type="hidden" name="confirmacion" value="1">
+            <button class="btn btn-primary" type="submit">
+                Sí, cambiar el modelo
+            </button>
+        </form>
+        <a class="btn btn-outline" href="{% url 'reportes:tablero' proyecto.pk %}">
+            Cancelar
+        </a>
+    </div>
+</section>
+{% endif %}
+
+{% if vigente %}
+<section class="card model-card section-gap">
+    <div class="card-head">
+        <div>
+            <h3>Modelo aplicado</h3>
+            <p class="model-description">
+                {{ vigente.modelo_calidad.descripcion }}
+            </p>
+        </div>
+        <span class="status green">Vigente</span>
+    </div>
+
+    <dl class="detail-list">
+        <dt>Modelo</dt>
+        <dd>{{ vigente.modelo_calidad.nombre }}</dd>
+        <dt>Aplicado desde</dt>
+        <dd>{{ vigente.fecha_aplicacion|date:"d/m/Y" }}</dd>
+        <dt>Características</dt>
+        <dd>
+            {% for caracteristica in vigente.modelo_calidad.obtener_caracteristicas %}
+            <span class="role-tag">{{ caracteristica.nombre }}</span>
+            {% empty %}
+            <span class="muted">Sin características</span>
+            {% endfor %}
+        </dd>
+        <dt>Métricas</dt>
+        <dd>
+            {{ vigente.metricas_aplicadas|length }}
+            métrica{{ vigente.metricas_aplicadas|length|pluralize:"s" }}
+        </dd>
+    </dl>
+
+    <div class="detail-actions">
+        <a class="btn btn-outline btn-sm" href="{% url 'reportes:metricas' proyecto.pk %}">
+            <svg class="icon icon-sm"><use href="#i-metrics"></use></svg>
+            Ver métricas y mediciones
+        </a>
+    </div>
+</section>
+{% else %}
+<section class="card empty-state section-gap">
+    <svg class="icon empty-icon"><use href="#i-layers"></use></svg>
+    <h3>Sin modelo de calidad aplicado</h3>
+    <p>
+        Este proyecto todavía no tiene un modelo vigente. Elige uno de los
+        modelos predefinidos para asignarlo al proyecto.
+    </p>
+</section>
+{% endif %}
+
+<section class="section-gap">
+    <div class="card-head">
+        <div>
+            <h3>{% if vigente %}Cambiar de modelo{% else %}Modelos predefinidos{% endif %}</h3>
+            <p class="muted">
+                Elige el modelo que se aplicará al proyecto. Solo se ofrecen
+                los modelos predefinidos; el catálogo muestra el detalle de
+                cada uno.
+            </p>
+        </div>
+    </div>
+</section>
+
+{% for modelo in modelos %}
+    {% include 'modelos/_tarjeta_modelo.html' with modelo=modelo aplicado=vigente proyecto=proyecto %}
+{% empty %}
+<section class="card empty-state">
+    <svg class="icon empty-icon"><use href="#i-layers"></use></svg>
+    <h3>No hay modelos de calidad predefinidos</h3>
+    <p>Ejecuta las migraciones para cargar los modelos base.</p>
+</section>
+{% endfor %}
+{% endblock %}
