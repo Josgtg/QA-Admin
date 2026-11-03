@@ -1,0 +1,120 @@
+@startuml hu9_clases
+allowmixing
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam nodesep 70
+skinparam ranksep 95
+top to bottom direction
+
+title Clases: consulta del catálogo base de métricas (HU-09)
+
+actor "Encargado de QA" as Encargado
+
+package "reportes.template" #FAEEDA {
+  class CatalogoMetricasTemplate
+}
+
+package "reportes.view" #FAEEDA {
+  class CatalogoMetricasView {
+    + get(request: HttpRequest): HttpResponse
+    + listar_metricas(): List<Metrica>
+    + filtrar_por_caracteristica(caracteristica_id: int): List<Metrica>
+    + filtrar_por_conformidad(cumple: boolean): List<Metrica>
+    + caracteristicas_disponibles(): List<Caracteristica>
+  }
+}
+
+package "modelos.model" #EEEDFE {
+  enum TipoUmbral {
+    MINIMO
+    MAXIMO
+  }
+
+  class Caracteristica {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    + obtener_metricas(): List<Metrica>
+  }
+
+  class Metrica {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - forma_medicion: String
+    - unidad: String
+    - valor_min: Float
+    - valor_max: Float
+    + rango_esperado(): String
+    + validar_rango(valor: Float): boolean
+  }
+
+  class ModeloMetrica {
+    - id: int
+    - umbral: Float
+    - tipo_umbral: TipoUmbral
+    - activa: boolean
+    + evaluar_cumplimiento(valor: Float): boolean
+  }
+}
+
+Caracteristica "1" *-- "0..*" Metrica : agrupa
+Metrica "1" --> "0..*" ModeloMetrica : se configura en
+ModeloMetrica --> TipoUmbral
+
+Encargado ..> CatalogoMetricasTemplate : interactúa
+CatalogoMetricasTemplate ..> CatalogoMetricasView : dispara solicitud
+CatalogoMetricasView ..> Metrica : lista y filtra
+CatalogoMetricasView ..> Caracteristica : agrupa por
+CatalogoMetricasView ..> ModeloMetrica : lee umbral informativo
+
+note top of CatalogoMetricasView
+  CA1 · El catálogo base es de solo lectura: el
+  encargado no puede crear, editar ni borrar
+  métricas. Solo existen operaciones de consulta
+  (listar_metricas, filtrar_*).
+  CA2 · Se puede filtrar por característica; si
+  no hay coincidencias se muestra un estado vacío.
+  La URL de la vista no se fija en este diagrama
+  (ver HU-09 / notas de implementación).
+end note
+
+note right of CatalogoMetricasTemplate
+  CA3 · Cada tarjeta de métrica muestra nombre,
+  descripción, forma_medicion, unidad y rango
+  esperado (valor_min – valor_max). Las métricas
+  se agrupan por característica.
+end note
+
+note bottom of CatalogoMetricasView
+  Requisito de HU-16: crear un modelo propio exige
+  nombre, descripción y al menos una característica
+  con una métrica. El catálogo de HU-09 solo aporta
+  la consulta de esas métricas; no crea modelos.
+end note
+
+note bottom of Metrica
+  Metrica es un registro del catálogo base
+  (solo lectura en HU-09). forma_medicion describe
+  cómo se obtiene el valor; el rango admisible vive
+  en valor_min/valor_max. No guarda metas.
+end note
+
+note bottom of ModeloMetrica
+  El umbral y su dirección viven aquí, no en
+  Metrica. En HU-09 solo es informativo:
+  MINIMO: valor >= umbral; MAXIMO: valor <= umbral.
+  Filtrar por conformidad (cumple) es una
+  consulta derivada, nunca una escritura.
+end note
+
+note bottom of Caracteristica
+  Caracteristica es un catálogo global: agrupa
+  métricas. Un modelo incluye métricas mediante
+  ModeloMetrica; sus características se infieren
+  de esas métricas. No hay FK de Caracteristica
+  a ModeloCalidad.
+end note
+@enduml

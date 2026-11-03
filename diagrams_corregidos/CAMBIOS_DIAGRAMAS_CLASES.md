@@ -426,6 +426,29 @@ historial.
 | HU-01 | Secuencia de revisión de métrica. | **Creado:** `secuencia/hu1_secuencia.puml`. |
 | HU-04 | Clases del catálogo de técnicas. | **Creado:** `clases/hu4_clases.puml`. |
 | HU-04 | Secuencia propia del catálogo de técnicas. | **Creado:** `secuencia/hu4_secuencia.puml`. |
+| HU-09 | Clases del catálogo base de métricas. | **Creado:** `clases/hu9_clases.puml`. |
+| HU-09 | Secuencia de listado y filtrado del catálogo de métricas. | **Creado:** `secuencia/hu9_secuencia.puml`. |
+| HU-11 | Clases de pasos completados y faltantes de una TQA. | **Creado:** `clases/hu11_clases.puml`. |
+| HU-11 | Secuencia de consulta de pasos y porcentaje de avance. | **Creado:** `secuencia/hu11_secuencia.puml`. |
+
+### 7.1 Notas de diseño de HU-09 y HU-11
+
+- **HU-09** es de solo lectura: la vista expone únicamente operaciones de
+  consulta (`listar_metricas()`, `filtrar_*`). `Metrica` incorpora
+  `forma_medicion` (CA de la historia) y `rango_esperado()`; `ModeloMetrica` se
+  consulta solo con fin informativo (umbral y `tipo_umbral`). La URL del catálogo
+  no se fija en el diagrama.
+- **HU-11** reutiliza sin cambios estructurales las clases de HU-05
+  (`SeguimientoTecnica`, `SeguimientoPaso`, `Evidencia`). Añade el DTO de solo
+  lectura `EstadoTecnica` (`tecnica`, `pasos`, `porcentaje_avance`, `completa`)
+  que **no se persiste**, y las operaciones derivadas
+  `SeguimientoTecnica.calcular_avance()`, `esta_completada()`,
+  `pasos_completados()` y `pasos_pendientes()`.
+- Regla de cálculo: `porcentaje_avance = (pasos completados / pasos totales) * 100`;
+  `completa = (porcentaje_avance == 100)`; `porcentaje_avance = 0` si no hay
+  pasos. Un paso completado debe tener `Evidencia` (regla HU-10 reutilizada).
+- Se añadió en `hu5_clases.puml` una nota sobre `EstadoTecnica` y la
+  reutilización de `SeguimientoPaso.esta_completado()` (plan §5).
 
 ---
 
@@ -587,3 +610,51 @@ Se borraron los 8 archivos de migración y se regeneraron **3 `0001_initial`** +
 esquema nace con su nombre definitivo (`reportes_proyecto`) y no hay data
 migrations de conversión. El seed del catálogo incluye **6 técnicas con
 contenido `[PENDIENTE]`** (deuda de contenido, no de esquema).
+
+---
+
+## 12. Cierre de la fase 4 — diagramas de HU-09 y HU-11 (2026-11-02)
+
+Se ejecutó `design_plan.md`: se crearon los cuatro diagramas de HU-09 y HU-11 y
+se actualizó la nota de `hu5_clases.puml`.
+
+| Archivo | Contenido |
+|---|---|
+| `clases/hu9_clases.puml` | `CatalogoMetricasTemplate`, `CatalogoMetricasView` (solo consulta), `Caracteristica`, `Metrica` (con `forma_medicion` y `rango_esperado()`), `ModeloMetrica` (informativo) y `TipoUmbral`. |
+| `secuencia/hu9_secuencia.puml` | Listado, filtro por característica y consulta de conformidad; ningún paso escribe. |
+| `clases/hu11_clases.puml` | `EstadoTecnicaTemplate`, `EstadoTecnicaView`, DTO `EstadoTecnica` y las clases de HU-05 (`TecnicaQA`, `Paso`, `SeguimientoTecnica`, `SeguimientoPaso`, `Evidencia`) más `Proyecto` y `MiembroProyecto`. |
+| `secuencia/hu11_secuencia.puml` | Recuperación del `SeguimientoTecnica`, listado de pasos con estado, cálculo de avance y armado del DTO. |
+| `clases/hu5_clases.puml` | Nota nueva sobre `EstadoTecnica` y la reutilización de `SeguimientoPaso.esta_completado()`. |
+
+### 12.1 Verificación técnica
+
+Motor: PlantUML 1.2024.3 (`jebbs.plantuml-2.18.1`), Java 21. Comandos desde
+`QA-Admin/diagrams_corregidos`:
+
+```powershell
+java -jar "C:\Users\rodri\.vscode\extensions\jebbs.plantuml-2.18.1\plantuml.jar" `
+  -charset UTF-8 -checkonly `
+  "clases/hu9_clases.puml" "clases/hu11_clases.puml" `
+  "secuencia/hu9_secuencia.puml" "secuencia/hu11_secuencia.puml" "clases/hu5_clases.puml"
+
+java -jar "C:\Users\rodri\.vscode\extensions\jebbs.plantuml-2.18.1\plantuml.jar" `
+  -charset UTF-8 -tpng -o ../../diags_pngs/clases `
+  "clases/hu9_clases.puml" "clases/hu11_clases.puml" "clases/hu5_clases.puml"
+
+java -jar "C:\Users\rodri\.vscode\extensions\jebbs.plantuml-2.18.1\plantuml.jar" `
+  -charset UTF-8 -tpng -o ../../diags_pngs/secuencia `
+  "secuencia/hu9_secuencia.puml" "secuencia/hu11_secuencia.puml"
+```
+
+- `-checkonly`: sin errores (código de salida 0) en los cinco archivos.
+- PNG generados en `diags_pngs/clases/` y `diags_pngs/secuencia/` (raíz del
+  proyecto, junto a los anteriores); los cuatro diagramas nuevos se revisaron
+  visualmente sin recortes ni solapamientos.
+- Los nombres de paquete con punto se dibujan anidados (`reportes` > `view`),
+  igual que en los diagramas previos (sección 2.1).
+- **Sin cambios de código:** no se tocó Django, migraciones ni plantillas.
+
+### 12.2 Pendiente
+
+La implementación de vistas, plantillas y URLs de HU-09 y HU-11 en Django queda
+fuera de este plan (sección 8, paso 5 de `design_plan.md`).
