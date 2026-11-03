@@ -258,8 +258,18 @@ class RevisionMetricaTests(TestCase):
 
         self.assertTrue(metrica.esta_aceptada(self.proyecto))
 
-        self.instantanea.umbral = 99
-        self.instantanea.save(update_fields=['umbral'])
+        exigente = ModeloCalidad.objects.create(
+            nombre='Modelo exigente',
+            descripcion='umbral más alto',
+            predefinido=True,
+        )
+        ModeloMetrica.objects.create(
+            modelo_calidad=exigente,
+            metrica=metrica,
+            umbral=99,
+            tipo_umbral=TipoUmbral.MINIMO,
+        )
+        self.proyecto.aplicar_modelo(exigente)
 
         self.assertFalse(metrica.esta_aceptada(self.proyecto))
 
@@ -333,6 +343,17 @@ class MetricaCompartidaTests(TestCase):
 
 
 class MetricaAplicadaTests(TestCase):
+    def test_instantanea_no_se_modifica(self):
+        proyecto = crear_proyecto()
+        aplicado = proyecto.aplicar_modelo(
+            ModeloCalidad.objects.get(nombre='McCall')
+        )
+        instantanea = aplicado.metricas_aplicadas().first()
+        instantanea.umbral = 1
+
+        with self.assertRaises(ValidationError):
+            instantanea.save()
+
     def test_revisiones_devuelve_las_de_la_instantanea(self):
         proyecto = crear_proyecto()
         miembro = crear_miembro(proyecto)

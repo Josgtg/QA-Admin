@@ -6,7 +6,12 @@ from django.utils import timezone
 
 from apps.tecnicas.models import SeguimientoTecnica, TecnicaQA
 from apps.tecnicas.selection import SESSION_KEY
-from apps.modelos.models import ModeloAplicado, ModeloCalidad, RevisionMetrica
+from apps.modelos.models import (
+    ModeloAplicado,
+    ModeloCalidad,
+    ModeloMetrica,
+    RevisionMetrica,
+)
 
 from .forms import ProyectoForm
 from .models import (
@@ -623,6 +628,24 @@ class MetricasProyectoViewTests(TestCase):
         self.assertEqual(len(respuesta.context['metricas']), 4)
         self.assertContains(respuesta, 'Requisitos implementados correctamente')
         self.assertContains(respuesta, 'Sin medición')
+
+    def test_metricas_se_muestran_en_tarjetas_independientes(self):
+        from apps.modelos.models import ModeloCalidad
+
+        proyecto = crear_proyecto('Alpha')
+        proyecto.aplicar_modelo(ModeloCalidad.objects.get(nombre='McCall'))
+
+        respuesta = self.client.get(
+            reverse('reportes:metricas', args=[proyecto.pk])
+        )
+
+        self.assertContains(respuesta, 'class="metric-cards"')
+        self.assertContains(
+            respuesta,
+            'class="card metric-card"',
+            count=4,
+        )
+        self.assertContains(respuesta, 'Ver historial (', count=4)
 
     def test_proyecto_inexistente_404(self):
         respuesta = self.client.get(
@@ -1469,8 +1492,20 @@ class EstadoMetricasHU14Tests(TestCase):
 
     def test_metrica_inactiva_no_cuenta(self):
         total = len(self.metricas)
-        self.metricas[0].activa = False
-        self.metricas[0].save()
+        modelo = ModeloCalidad.objects.create(
+            nombre='Modelo con métrica inactiva',
+            descripcion='una métrica desactivada',
+            predefinido=True,
+        )
+        for indice, instantanea in enumerate(self.metricas):
+            ModeloMetrica.objects.create(
+                modelo_calidad=modelo,
+                metrica=instantanea.metrica,
+                umbral=instantanea.umbral,
+                tipo_umbral=instantanea.tipo_umbral,
+                activa=indice != 0,
+            )
+        self.proyecto.aplicar_modelo(modelo)
         self.assertEqual(len(self.proyecto.estado_metricas()), total - 1)
 
     def test_nombres_repetidos_cuentan_por_separado(self):

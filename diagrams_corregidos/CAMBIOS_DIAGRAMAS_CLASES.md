@@ -602,6 +602,7 @@ pantalla de seguimiento. Se actualizó la nota de `TecnicaQA` en
 | `hu7_secuencia.puml` | `filtrar_por_fecha(...)` → `esta_en_periodo(periodo)` (prevalecen las clases) |
 | `hu6_secuencia_crear_proyecto.puml` | `note over of` → `note over` (sintaxis PlantUML) |
 | `hu6_clases.puml` | Nota del panel de previsualización: 4 acciones (tablero, editar, técnicas, métricas) |
+| `hu8_clases.puml` y `hu8_secuencia.puml` | Alineados con el modelo canónico: `Proyecto` en `reportes.model`, instantánea `MetricaAplicada` inmutable, `Metrica.esta_aceptada()`/`revisiones()`, historial embebido y sin `HistorialMetricaView` ni `EstadoMetrica` |
 
 ### 11.5 Migraciones reseteadas
 

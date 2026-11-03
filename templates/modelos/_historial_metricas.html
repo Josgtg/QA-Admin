@@ -3,13 +3,15 @@ Historial de revisiones de una métrica (HU-01).
 
 Se incluye desde la pantalla de registro y desde el índice de métricas.
 {% endcomment %}
-<section class="card section-gap">
+<section class="{% if embebido %}history-embedded{% else %}card section-gap{% endif %}">
+    {% if not ocultar_cabecera %}
     <div class="card-head">
         <h3>Historial de {{ metrica.nombre }}</h3>
         <span class="head-muted">
             {{ historial|length }} revisión{{ historial|length|pluralize:"es" }}
         </span>
     </div>
+    {% endif %}
 
     {% if historial %}
     <div class="table-wrap">

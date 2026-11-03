@@ -1,0 +1,172 @@
+@startuml clases_hu08
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype polyline
+skinparam packageStyle rectangle
+skinparam nodesep 60
+skinparam ranksep 80
+skinparam defaultFontSize 12
+skinparam classFontSize 12
+
+title Clases: estado de las metricas del proyecto (HU-08)
+
+package "reportes.template" #E1F5EE {
+  class MetricasProyectoTemplate
+  class HistorialMetricaTemplate
+}
+
+package "reportes.view" #FAEEDA {
+  class MetricasProyectoView {
+    + get(request: HttpRequest, proyecto_id: int): HttpResponse
+  }
+
+  class resumen_metricas <<function>> {
+    + resumen_metricas(proyecto: Proyecto, aplicado: ModeloAplicado): List<Fila>
+  }
+}
+
+package "reportes.model" #FAEEDA {
+  class Proyecto {
+    - id: int
+    - nombre: String
+    + modelo_aplicado_vigente(): ModeloAplicado [0..1]
+    + revisiones(): QuerySet<RevisionMetrica>
+  }
+
+  class MiembroProyecto {
+    - id: int
+    - rol: String
+    - activo: boolean
+  }
+}
+
+package "modelos.model" #EEEDFE {
+  enum TipoUmbral {
+    MINIMO
+    MAXIMO
+  }
+
+  class Caracteristica {
+    - id: int
+    - nombre: String
+  }
+
+  class Metrica {
+    - id: int
+    - nombre: String
+    - unidad: String
+    - valor_min: Float [0..1]
+    - valor_max: Float [0..1]
+    + revisiones(proyecto: Proyecto): QuerySet<RevisionMetrica>
+    + ultima_revision(proyecto: Proyecto): RevisionMetrica [0..1]
+    + ultimo_valor(proyecto: Proyecto): Float [0..1]
+    + instantanea_vigente(proyecto: Proyecto): MetricaAplicada [0..1]
+    + esta_aceptada(proyecto: Proyecto): boolean
+    + validar_rango(valor: Float): boolean
+  }
+
+  class ModeloAplicado {
+    - id: int
+    - fecha_aplicacion: Date
+    - fecha_cierre: Date [0..1]
+    - vigente: boolean
+    + metricas_aplicadas(): QuerySet<MetricaAplicada>
+    + metrica_aplicada(metrica: Metrica): MetricaAplicada [0..1]
+  }
+
+  class MetricaAplicada {
+    - id: int
+    - umbral: Float
+    - tipo_umbral: TipoUmbral
+    - activa: boolean
+    + evaluar_cumplimiento(valor: Float): boolean
+    + esta_activa(): boolean
+    + revisiones(): QuerySet<RevisionMetrica>
+  }
+
+  class RevisionMetrica {
+    - id: int
+    - valor: Float
+    - fecha: Date
+    - enlace: String [0..1]
+    - archivo: String [0..1]
+    - cumple: boolean
+    + calcular_cumple(): boolean
+    + tiene_evidencia(): boolean
+  }
+}
+
+' Relaciones de dominio
+Caracteristica "1" *-- "0..*" Metrica : agrupa
+Proyecto "1" --> "0..*" ModeloAplicado : historial de aplicaciones
+ModeloAplicado "1" *-- "1..*" MetricaAplicada : instantanea
+Metrica "1" --> "0..*" MetricaAplicada : se aplica como
+MetricaAplicada "1" *-- "0..*" RevisionMetrica : se mide en
+RevisionMetrica "*" --> "1" MiembroProyecto : registra
+MetricaAplicada --> TipoUmbral
+
+' Relaciones MVT
+MetricasProyectoTemplate ..> MetricasProyectoView : dispara solicitud
+MetricasProyectoTemplate ..> HistorialMetricaTemplate : incluye embebido
+MetricasProyectoView ..> resumen_metricas : usa
+resumen_metricas ..> Proyecto : modelo_aplicado_vigente()
+resumen_metricas ..> ModeloAplicado : metricas_aplicadas()
+resumen_metricas ..> Metrica : ultima_revision(), esta_aceptada(), revisiones()
+MetricasProyectoTemplate ..> Metrica : muestra ultimo valor y estado
+
+note bottom of Proyecto
+  CA1 · El proyecto obtiene su modelo vigente
+  (HU-02) y de ahi su instantanea de metricas.
+  Sin modelo aplicado la vista muestra el
+  estado vacio.
+end note
+
+note top of Metrica
+  CA1 · ultima_revision() elige la revision
+  mas reciente por fecha; en empate, la de
+  mayor id. CA2 · Sin revision el estado es
+  "Sin medicion" y nunca cuenta como cumplida.
+  El estado se reevalua con el umbral de la
+  instantanea vigente, no con una meta mutable
+  en Metrica.
+end note
+
+note bottom of MetricaAplicada
+  Instantanea inmutable de ModeloMetrica:
+  guarda umbral, tipo_umbral y activa al
+  aplicar el modelo. Cambiar de modelo crea
+  una nueva instantanea y conserva el
+  historial de revisiones.
+end note
+
+note bottom of RevisionMetrica
+  HU-01 registra la revision con valor,
+  fecha y evidencia (enlace o archivo), y
+  con el autor MiembroProyecto del proyecto.
+  HU-08 solo la lee: no crea ni modifica.
+  cumple se calcula al registrar con la
+  instantanea y se conserva para que el
+  historial no cambie si el modelo cambia
+  despues.
+end note
+
+note as A1
+  CA1 · Muestra una tarjeta por metrica con
+  su ultimo valor, umbral y estado.
+  CA4 · La plantilla muestra "No cumple" en
+  rojo; ya no usa filas de tabla ni
+  border-red.
+end note
+
+A1 .. MetricasProyectoTemplate
+
+note as A2
+  CA3 · El historial se muestra dentro de la
+  misma tarjeta, en un <details>, usando el
+  parcial HistorialMetricaTemplate. No existe
+  una vista ni URL de historial separada.
+end note
+
+HistorialMetricaTemplate . A2
+
+@enduml

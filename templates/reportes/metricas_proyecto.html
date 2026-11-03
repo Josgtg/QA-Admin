@@ -51,79 +51,75 @@
 </section>
 {% else %}
 
-<section class="card">
-    <div class="card-head">
-        <h3>Métricas del modelo vigente</h3>
-        <span class="head-muted">
-            {{ metricas|length }} métrica{{ metricas|length|pluralize:"s" }}
-        </span>
-    </div>
+<div class="card-head metric-cards-head">
+    <h3>Métricas del modelo vigente</h3>
+    <span class="head-muted">
+        {{ metricas|length }} métrica{{ metricas|length|pluralize:"s" }}
+    </span>
+</div>
 
-    {% if metricas %}
-    <div class="table-wrap">
-        <table class="data">
-            <thead>
-                <tr>
-                    <th>Característica</th>
-                    <th>Métrica</th>
-                    <th>Último valor</th>
-                    <th>Umbral</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for fila in metricas %}
-                <tr>
-                    <td><div class="cell-title">{{ fila.metrica.caracteristica.nombre }}</div></td>
-                    <td>
-                        <div class="cell-title">{{ fila.metrica.nombre }}</div>
-                        <div class="cell-sub">{{ fila.metrica.unidad }}</div>
-                    </td>
-                    <td>
-                        {% if fila.valor is not None %}
-                        {{ fila.valor|floatformat:'-2' }}
-                        {% else %}
-                        <span class="health-empty">Sin medición</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if fila.instantanea.tipo_umbral == 'MINIMO' %}≥{% else %}≤{% endif %}
-                        {{ fila.instantanea.umbral|floatformat:'-2' }}
-                    </td>
-                    <td>
-                        {% if fila.valor is None %}
-                        <span class="status gray">Sin medición</span>
-                        {% elif fila.aceptada %}
-                        <span class="status green">Cumple</span>
-                        {% else %}
-                        <span class="status gray">No cumple</span>
-                        {% endif %}
-                    </td>
-                    <td class="actions-cell">
-                        <a class="icon-btn"
-                           href="{% url 'reportes:registrar_revision' proyecto.pk fila.metrica.pk %}"
-                           title="Registrar revisión"
-                           aria-label="Registrar revisión de {{ fila.metrica.nombre }}">
-                            <svg class="icon"><use href="#i-plus"></use></svg>
-                        </a>
-                    </td>
-                </tr>
-                <tr>
-                    <td colspan="6">
-                        <details>
-                            <summary class="muted">Historial de {{ fila.metrica.nombre }}</summary>
-                            {% include 'modelos/_historial_metricas.html' with historial=fila.revisiones metrica=fila.metrica %}
-                        </details>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
+{% if metricas %}
+<div class="metric-cards">
+    {% for fila in metricas %}
+    <section class="card metric-card">
+        <div class="metric-card-head">
+            <div>
+                <h3>{{ fila.metrica.nombre }}</h3>
+                <div class="cell-sub metric-card-sub">
+                    {{ fila.metrica.caracteristica.nombre }} · {{ fila.metrica.unidad }}
+                </div>
+            </div>
+            {% if fila.valor is None %}
+            <span class="status gray">Sin medición</span>
+            {% elif fila.aceptada %}
+            <span class="status green">Cumple</span>
+            {% else %}
+            <span class="status red">No cumple</span>
+            {% endif %}
+        </div>
+
+        <div class="metric-stats">
+            <div>
+                <span class="metric-stat-label">Último valor</span>
+                <strong class="metric-stat-value">
+                    {% if fila.valor is not None %}
+                    {{ fila.valor|floatformat:'-2' }} {{ fila.metrica.unidad }}
+                    {% else %}
+                    <span class="health-empty">Sin medición</span>
+                    {% endif %}
+                </strong>
+            </div>
+            <div>
+                <span class="metric-stat-label">Umbral</span>
+                <strong class="metric-stat-value">
+                    {% if fila.instantanea.tipo_umbral == 'MINIMO' %}≥{% else %}≤{% endif %}
+                    {{ fila.instantanea.umbral|floatformat:'-2' }} {{ fila.metrica.unidad }}
+                </strong>
+            </div>
+        </div>
+
+        <div class="metric-card-actions">
+            <a class="btn btn-outline btn-sm"
+               href="{% url 'reportes:registrar_revision' proyecto.pk fila.metrica.pk %}"
+               aria-label="Registrar revisión de {{ fila.metrica.nombre }}">
+                <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+                Registrar revisión
+            </a>
+        </div>
+
+        <details class="metric-history">
+            <summary class="link">
+                Ver historial ({{ fila.revisiones|length }})
+            </summary>
+            {% include 'modelos/_historial_metricas.html' with historial=fila.revisiones metrica=fila.metrica embebido=True ocultar_cabecera=True %}
+        </details>
+    </section>
+    {% endfor %}
+</div>
+{% else %}
+<section class="card">
     <div class="empty-row">Este modelo no tiene métricas configuradas.</div>
-    {% endif %}
 </section>
+{% endif %}
 {% endif %}
 {% endblock %}
