@@ -1,0 +1,58 @@
+{% comment %}
+Un paso del estado de la técnica (HU-11).
+
+Muestra el icono de estado, la instrucción, la fecha y comentario, y el acceso
+a la evidencia cuando el paso está completado. La evidencia se obtiene con
+``evidencia_segura`` para no fallar cuando el paso no tiene ninguna.
+{% endcomment %}
+{% with evidencia=paso.evidencia_segura %}
+<div class="tech-item">
+    {% if paso.esta_completado %}
+    <span class="tech-icon green"><svg class="icon"><use href="#i-check-circle"></use></svg></span>
+    {% else %}
+    <span class="tech-icon amber"><svg class="icon"><use href="#i-clock"></use></svg></span>
+    {% endif %}
+    <span class="tech-name">{{ paso.paso.orden }}. {{ paso.paso.instruccion }}</span>
+    {% if paso.esta_completado %}
+    <span class="tech-status green">Completado</span>
+    {% else %}
+    <span class="tech-status gray">Pendiente</span>
+    {% endif %}
+</div>
+<div class="cell-sub">
+    {% if paso.esta_completado %}
+        {% if paso.fecha_completado %}
+        Completado el {{ paso.fecha_completado|date:"d/m/Y H:i" }}
+        {% endif %}
+        {% if paso.comentario %} · {{ paso.comentario }}{% endif %}
+        <div class="detail-actions">
+            {% if evidencia.enlace %}
+            <a class="btn btn-outline btn-sm" href="{{ evidencia.enlace }}"
+               target="_blank" rel="noopener noreferrer">
+                <svg class="icon icon-sm"><use href="#i-link"></use></svg>
+                Abrir evidencia
+            </a>
+            {% endif %}
+            {% if evidencia.archivo %}
+            <a class="btn btn-outline btn-sm" href="{{ evidencia.archivo.url }}"
+               target="_blank" rel="noopener noreferrer">
+                <svg class="icon icon-sm"><use href="#i-download"></use></svg>
+                Descargar archivo
+            </a>
+            {% endif %}
+            {% if not evidencia %}
+            <span class="status gray">Sin evidencia registrada</span>
+            {% endif %}
+            <a class="link" href="{% url 'tecnicas:registrar_evidencia' paso.pk %}">Ver / reemplazar evidencia</a>
+        </div>
+    {% else %}
+    Evidencia esperada: {{ paso.paso.evidencia_esperada|default:"Sin definir" }}
+    <div class="detail-actions">
+        <a class="btn btn-outline btn-sm" href="{% url 'tecnicas:registrar_evidencia' paso.pk %}">
+            <svg class="icon icon-sm"><use href="#i-file"></use></svg>
+            Registrar evidencia
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endwith %}
