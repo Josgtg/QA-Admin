@@ -3,6 +3,13 @@ from django.db import models
 from django.utils import timezone
 
 
+def _formatear_numero(valor):
+    """Número sin decimales innecesarios: ``90.0`` → ``"90"``."""
+    if float(valor).is_integer():
+        return str(int(valor))
+    return str(valor)
+
+
 class TipoUmbral(models.TextChoices):
     MINIMO = 'MINIMO', 'Mínimo'
     MAXIMO = 'MAXIMO', 'Máximo'
@@ -113,6 +120,11 @@ class Metrica(models.Model):
     )
     nombre = models.CharField(max_length=200)
     descripcion = models.TextField(blank=True)
+    forma_medicion = models.TextField(
+        blank=True,
+        verbose_name='forma de medición',
+        help_text='Cómo se obtiene el valor de la métrica.',
+    )
     unidad = models.CharField(max_length=50)
     valor_min = models.FloatField(null=True, blank=True)
     valor_max = models.FloatField(null=True, blank=True)
@@ -124,6 +136,36 @@ class Metrica(models.Model):
 
     def __str__(self):
         return self.nombre
+
+    def rango_esperado(self):
+        """Rango admisible con su unidad (HU-09).
+
+        Devuelve ``None`` cuando la métrica no declara ningún límite; con un
+        solo límite devuelve ese límite como mínimo o como máximo.
+        """
+        if self.valor_min is None and self.valor_max is None:
+            return None
+        if self.valor_max is None:
+            texto = f'≥ {_formatear_numero(self.valor_min)}'
+        elif self.valor_min is None:
+            texto = f'≤ {_formatear_numero(self.valor_max)}'
+        else:
+            texto = (
+                f'{_formatear_numero(self.valor_min)} – '
+                f'{_formatear_numero(self.valor_max)}'
+            )
+        return f'{texto} {self.unidad}'.strip()
+
+    def umbrales_por_modelo(self):
+        """Umbral informativo de la métrica en cada modelo que la incluye.
+
+        El catálogo de HU-09 es de solo lectura: se consulta, nunca se edita.
+        Se omiten las configuraciones inactivas (``activa=False``), porque su
+        umbral no aplica al modelo.
+        """
+        return self.modelo_metricas.filter(activa=True).select_related(
+            'modelo_calidad'
+        ).order_by('modelo_calidad__nombre')
 
     def validar_rango(self, valor):
         """Valida el valor contra ``valor_min``/``valor_max``.

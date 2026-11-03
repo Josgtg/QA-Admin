@@ -2046,3 +2046,14 @@ table.data {
     margin: 2px 0 6px;
     padding-left: 18px;
 }
+
+/* HU-09: fila de filtros del catálogo de métricas. */
+.filter-row .select-input.filter-compact {
+    min-width: 0;
+    width: auto;
+}
+
+.filter-row .select-input.filter-numero {
+    min-width: 0;
+    width: 110px;
+}
