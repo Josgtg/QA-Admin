@@ -51,6 +51,16 @@
             <h3>Evidencia</h3>
         </div>
 
+        {% if evidencia %}
+        <div class="flash flash-success">
+            Evidencia del {{ evidencia.fecha|date:"d/m/Y" }} registrada por
+            {{ evidencia.miembro_proyecto.persona.nombre }}.
+            <a class="link"
+               href="{% url 'tecnicas:abrir_evidencia' evidencia.pk %}"
+               target="_blank" rel="noopener">Abrir evidencia</a>
+        </div>
+        {% endif %}
+
         <form method="post" enctype="multipart/form-data" novalidate>
             {% csrf_token %}
 
@@ -74,9 +84,19 @@
                         {{ form.archivo.label }}
                     </label>
                     {{ form.archivo }}
-                    <p class="field-hint">Adjunta un enlace o un archivo.</p>
+                    <p class="field-hint">{{ form.archivo.help_text }}</p>
                     {% if form.archivo.errors %}
                     <div class="field-error">{{ form.archivo.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field field-wide">
+                    <label for="{{ form.fecha.id_for_label }}">
+                        {{ form.fecha.label }}
+                    </label>
+                    {{ form.fecha }}
+                    {% if form.fecha.errors %}
+                    <div class="field-error">{{ form.fecha.errors|striptags }}</div>
                     {% endif %}
                 </div>
 

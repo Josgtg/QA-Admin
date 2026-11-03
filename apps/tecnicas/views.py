@@ -1,6 +1,12 @@
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBadRequest,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -313,6 +319,7 @@ class RegistrarEvidenciaView(View):
                 'paso': paso,
                 'seguimiento': paso.seguimiento,
                 'proyecto': paso.seguimiento.proyecto,
+                'evidencia': self._evidencia_existente(paso),
                 'form': form,
             },
         )
@@ -392,3 +399,36 @@ class EstadoTecnicaView(View):
     def calcular_porcentaje_avance(self, seguimiento):
         """Deriva el avance de los pasos; no lo persiste."""
         return seguimiento.calcular_porcentaje_avance()
+
+class AbrirEvidenciaView(View):
+    """Abre el archivo o el enlace de una evidencia registrada (HU-10)."""
+
+    def get(self, request: HttpRequest, evidencia_id: int) -> HttpResponse:
+        evidencia = self.obtener_evidencia(evidencia_id)
+
+        if evidencia.archivo:
+            try:
+                archivo = evidencia.abrir_archivo()
+            except FileNotFoundError as error:
+                raise Http404(
+                    'El archivo de la evidencia no está disponible.'
+                ) from error
+            return FileResponse(
+                archivo,
+                as_attachment=False,
+                filename=evidencia.nombre_archivo(),
+            )
+
+        if evidencia.enlace:
+            return redirect(evidencia.enlace)
+
+        raise Http404('La evidencia no tiene archivo ni enlace.')
+
+    def obtener_evidencia(self, evidencia_id: int) -> Evidencia:
+        """Recupera la evidencia con su paso, seguimiento y proyecto."""
+        return get_object_or_404(
+            Evidencia.objects.select_related(
+                'seguimiento_paso__seguimiento__proyecto'
+            ),
+            pk=evidencia_id,
+        )

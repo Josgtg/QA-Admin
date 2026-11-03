@@ -1701,6 +1701,356 @@ table.data {
     }
 }
 
+/* Evidencias de pasos (HU-10) ------------------------------------------- */
+.card-title-left {
+    margin: 0 0 6px;
+    text-align: left;
+}
+
+.progress-card {
+    padding: 16px 18px;
+}
+
+.progress-card-main {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.progress-figure {
+    margin: 0;
+    color: #111827;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.progress-figure small {
+    color: var(--soft);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+}
+
+.progress-card-bar {
+    flex: 1;
+    min-width: 220px;
+}
+
+.progress-card-bar .bar {
+    height: 7px;
+}
+
+.progress-caption {
+    margin: 7px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.evidence-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.9fr);
+    gap: 16px;
+    margin-top: 16px;
+    align-items: start;
+}
+
+.steps-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+.step-card {
+    padding: 16px 18px;
+    border-left: 3px solid #e5e7eb;
+}
+
+.step-done {
+    border-left-color: var(--green-bright);
+}
+
+.step-pending {
+    border-left-color: #e5e7eb;
+}
+
+.step-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+}
+
+.step-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    flex: none;
+    border-radius: 50%;
+    background: #eef1f5;
+    color: #6b7280;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.step-done .step-number {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.step-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.step-title {
+    margin: 2px 0 0;
+    color: #1f2937;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.step-expected {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.step-expected strong {
+    color: #4b5563;
+    font-weight: 600;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.badge-green {
+    background: #ecfdf3;
+    color: #15803d;
+}
+
+.badge-gray {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.evidence-record {
+    margin: 12px 0 0 35px;
+    padding: 11px 13px;
+    border: 1px solid #e3f2e8;
+    border-radius: 7px;
+    background: #f7fdf9;
+}
+
+.evidence-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    color: var(--muted);
+    font-size: 10.5px;
+}
+
+.evidence-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.evidence-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 0 0;
+    color: #374151;
+    font-size: 11.5px;
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.evidence-comment {
+    margin: 7px 0 0;
+    color: #4b5563;
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
+.evidence-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 9px;
+    color: var(--primary);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.evidence-open:hover {
+    text-decoration: underline;
+}
+
+.step-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 12px 0 0 35px;
+    flex-wrap: wrap;
+}
+
+.step-foot-note {
+    color: var(--soft);
+    font-size: 10.5px;
+}
+
+.btn-step {
+    text-decoration: none;
+}
+
+.evidence-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.evidence-form-card {
+    position: sticky;
+    top: 16px;
+}
+
+.form-grid-single {
+    grid-template-columns: 1fr;
+}
+
+.field-optional {
+    color: var(--soft);
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.file-drop {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    border: 1px dashed #d8dde5;
+    border-radius: 7px;
+    background: #fbfcfd;
+}
+
+.file-drop:focus-within {
+    border-color: var(--primary);
+    background: #f8fbff;
+}
+
+.file-drop-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.file-drop-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #ffffff;
+    color: #374151;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.file-drop-button:hover {
+    border-color: #d7dbe2;
+    background: #fbfbfc;
+}
+
+.file-drop-name {
+    color: var(--soft);
+    font-size: 10.5px;
+    overflow-wrap: anywhere;
+}
+
+.textarea-input {
+    min-height: 74px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.rules-list {
+    margin: 0;
+    padding-left: 16px;
+    color: #4b5563;
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+.rules-list li + li {
+    margin-top: 5px;
+}
+
+.rules-list strong {
+    color: #374151;
+}
+
+.empty-state-sm {
+    padding: 26px 16px;
+}
+
+.empty-state-sm h3 {
+    margin-top: 10px;
+    font-size: 13px;
+}
+
+.form-actions-stack {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+}
+
+.form-actions-stack .btn {
+    width: 100%;
+}
+
+@media (max-width: 1100px) {
+    .evidence-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .evidence-form-card {
+        position: static;
+    }
+}
+
+@media (max-width: 720px) {
+    .step-footer,
+    .evidence-record {
+        margin-left: 0;
+    }
+}
+
 /* Projects list (HU-06) -------------------------------------------------- */
 .projects-actions .search {
     width: 250px;
@@ -2045,4 +2395,15 @@ table.data {
 .caida ul {
     margin: 2px 0 6px;
     padding-left: 18px;
+}
+
+/* HU-09: fila de filtros del catálogo de métricas. */
+.filter-row .select-input.filter-compact {
+    min-width: 0;
+    width: auto;
+}
+
+.filter-row .select-input.filter-numero {
+    min-width: 0;
+    width: 110px;
 }

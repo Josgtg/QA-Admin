@@ -24,7 +24,11 @@ Lista de pasos de un seguimiento, con su evidencia (HU-05 / HU-11).
     <div class="cell-sub">
         Evidencia esperada: {{ sp.paso.evidencia_esperada|default:"Sin definir" }}
         {% if sp.tiene_evidencia %}
-        · <a class="link" href="{% url 'tecnicas:registrar_evidencia' sp.pk %}">Ver / reemplazar evidencia</a>
+        · {{ sp.evidencia.fecha|date:"d/m/Y" }}
+        · {{ sp.evidencia.miembro_proyecto.persona.nombre }}
+        · <a class="link" href="{% url 'tecnicas:abrir_evidencia' sp.evidencia.pk %}"
+             target="_blank" rel="noopener">Abrir evidencia</a>
+        · <a class="link" href="{% url 'tecnicas:registrar_evidencia' sp.pk %}">Ver / reemplazar</a>
         {% endif %}
     </div>
     {% empty %}
