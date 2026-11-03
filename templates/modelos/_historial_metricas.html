@@ -46,11 +46,13 @@ Se incluye desde la pantalla de registro y desde el índice de métricas.
                         <a class="link" href="{{ revision.enlace }}" target="_blank" rel="noopener">
                             Ver enlace
                         </a>
-                        {% elif revision.archivo %}
-                        <a class="link" href="{{ revision.archivo.url }}" target="_blank" rel="noopener">
-                            Ver archivo
+                        {% endif %}
+                        {% if revision.archivo %}
+                        <a class="link" href="{% url 'reportes:descargar_evidencia_metrica' proyecto.pk revision.pk %}">
+                            Descargar archivo
                         </a>
-                        {% else %}
+                        {% endif %}
+                        {% if not revision.enlace and not revision.archivo %}
                         <span class="muted">Sin evidencia</span>
                         {% endif %}
                     </td>

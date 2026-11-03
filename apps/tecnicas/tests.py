@@ -72,13 +72,20 @@ class TecnicasBaseTests(TestCase):
         for tecnica in TecnicaQA.objects.all():
             self.assertGreater(tecnica.pasos.count(), 0, tecnica.nombre)
 
-    def test_seis_tecnicas_son_placeholder(self):
-        self.assertEqual(
-            TecnicaQA.objects.filter(
-                descripcion__startswith='[PENDIENTE]'
-            ).count(),
-            6,
-        )
+    def test_tecnicas_base_tienen_contenido_definitivo(self):
+        """Cada técnica base tiene instrucciones y evidencia esperada completas."""
+        for tecnica in TecnicaQA.objects.all():
+            with self.subTest(tecnica=tecnica.nombre):
+                for texto in (
+                    tecnica.nombre, tecnica.descripcion, tecnica.objetivo,
+                    tecnica.pregunta_clave,
+                ):
+                    self.assertTrue(texto.strip())
+                    self.assertNotIn('[PENDIENTE]', texto)
+                for paso in tecnica.obtener_pasos():
+                    self.assertTrue(paso.evidencia_esperada.strip())
+                    self.assertNotIn('[PENDIENTE]', paso.instruccion)
+                    self.assertNotIn('[PENDIENTE]', paso.evidencia_esperada)
 
 
 class CatalogoTecnicasViewTests(TestCase):
@@ -114,6 +121,9 @@ class CatalogoTecnicasViewTests(TestCase):
         self.assertContains(respuesta, 'No hay proyectos registrados')
 
     def test_muestra_etiqueta_por_definir(self):
+        tecnica = crear_tecnica()
+        tecnica.descripcion = '[PENDIENTE] Contenido propio sin completar.'
+        tecnica.save()
         respuesta = self.client.get(self.url)
 
         self.assertContains(respuesta, 'Por definir')

@@ -10,100 +10,110 @@ end box
 
 box "View Layer (modelos.view)"
   participant "RegistrarRevisionMetricaView" as View
+  participant "DescargarEvidenciaMetricaView" as Descarga
+end box
+
+box "Form Layer (modelos.forms)"
+  participant "RevisionMetricaForm" as Form
 end box
 
 box "Model Layer (reportes.model / modelos.model)"
-  participant "p: Proyecto" as Proyecto
   participant "m: Metrica" as Metrica
-  participant "ma: MetricaAplicada" as Snapshot
-  participant "mp: MiembroProyecto" as Miembro
-  participant "c: Caracteristica" as Caracteristica
+  participant "r: RevisionMetrica" as Revision
 end box
 
-== Registrar revisión de métrica y calcular seguimiento (HU-01) ==
+== Consultar formulario e historial (HU-01) ==
 
 Encargado -> Template: abrir(proyecto_id, metrica_id)
 Template -> View: get(request, proyecto_id, metrica_id)
 activate View
 
-View -> Proyecto: modelo_aplicado_vigente()
-activate Proyecto
-Proyecto --> View: ma_vigente: ModeloAplicado
-deactivate Proyecto
-
-View -> ma_vigente: metrica_aplicada(metrica)
-activate ma_vigente
-ma_vigente --> View: snapshot: MetricaAplicada (umbral, tipo_umbral, activa)
-deactivate ma_vigente
-
-View -> Metrica: ultima_revision(proyecto)
-activate Metrica
-Metrica --> View: ultima: RevisionMetrica
-deactivate Metrica
-
-View -> Metrica: ultimo_valor(proyecto)
-Metrica --> View: valor_ultimo: Float
-
-View --> Template: render(form, snapshot, ultima, valor_ultimo)
+View -> View: obtener_metrica_aplicada(proyecto, metrica_id)
+View --> View: instantanea: MetricaAplicada o null
+alt Sin aplicación vigente o métrica ajena al modelo
+    View --> Template: HttpResponse (302, selección del modelo)
+else Métrica disponible
+    View -> View: obtener_historial(proyecto, metrica)
+    View --> View: historial: List<RevisionMetrica>
+    View -> Metrica: ultima_revision(proyecto)
+    Metrica --> View: ultima: RevisionMetrica o null
+    View -> Metrica: ultimo_valor(proyecto)
+    Metrica --> View: valor_ultimo: Float o null
+    View --> Template: HttpResponse (200, formulario, instantánea e historial)
+    Template --> Encargado: Muestra rango, meta, estado, autor y evidencias
+end
 deactivate View
 
-Template --> Encargado: muestra formulario con umbral, tipo_umbral y último valor medido
+== Registrar medición con evidencia ==
 
-Encargado -> Template: enviar(valor, fecha, enlace, archivo)
+Encargado -> Template: enviar(valor, fecha, enlace, archivo, miembro_proyecto_id)
 Template -> View: post(request, proyecto_id, metrica_id)
 activate View
 
-View -> Metrica: validar_rango(valor)
-activate Metrica
-Metrica --> View: rango_ok: boolean
-deactivate Metrica
-
-alt valor fuera de [valor_min, valor_max]
-    View --> Template: HttpResponse (400, error de rango)
-    Template --> Encargado: corrige el valor
-else sin enlace ni archivo
-    View -> View: tiene_evidencia(enlace, archivo)
-    alt no tiene enlace ni archivo
-        View --> Template: HttpResponse (400, evidencia requerida)
-        Template --> Encargado: adjunta enlace o archivo
+View -> View: obtener_metrica_aplicada(proyecto, metrica_id)
+View --> View: instantanea: MetricaAplicada o null
+alt Sin aplicación vigente o métrica ajena al modelo
+    View --> Template: HttpResponse (302, selección del modelo)
+else Métrica disponible
+    View -> Form: RevisionMetricaForm(request.POST, request.FILES, proyecto)
+    View -> Form: is_valid()
+    Form --> View: formulario_valido: boolean
+    alt Campos inválidos, autor ajeno o falta evidencia
+        View --> Template: HttpResponse (200, formulario con errores)
+        Template --> Encargado: Señala los campos que debe corregir
+    else Formulario válido
+        View -> Form: save(commit=false)
+        Form --> View: revision: RevisionMetrica sin guardar
+        note right of View
+          Se asigna revision.metrica_aplicada = instantanea.
+        end note
+        View -> Revision: full_clean()
+        Revision -> Revision: clean()
+        Revision -> Revision: tiene_evidencia()
+        Revision --> Revision: hay_evidencia: boolean
+        Revision -> Metrica: validar_rango(valor)
+        Metrica --> Revision: rango_ok: boolean
+        note right of Revision
+          clean() verifica también que el autor
+          pertenezca al proyecto de la instantánea.
+        end note
+        Revision --> View: void o ValidationError
+        alt Error de rango o pertenencia
+            View --> Template: HttpResponse (200, formulario con errores)
+            Template --> Encargado: Muestra el error sin guardar la revisión
+        else Revisión válida
+            View -> Revision: save()
+            Revision -> Revision: calcular_cumple()
+            Revision --> Revision: cumple: boolean según la instantánea
+            Revision --> View: void (valor, fecha, evidencia, autor y cumple guardados)
+            View --> Template: HttpResponse (302, métricas del proyecto)
+            Template --> Encargado: Historial y cumplimiento actualizados al consultar métricas
+        end
     end
-else todo válido
-    View -> Proyecto: revisiones()
-    activate Proyecto
-    Proyecto --> View: historial: List<RevisionMetrica>
-    deactivate Proyecto
-
-    create participant "r: RevisionMetrica" as Revision
-    View -> Revision: RevisionMetrica(metrica_aplicada=snapshot, miembro_proyecto=autor, valor, fecha, enlace, archivo)
-    activate Revision
-    Revision -> Miembro: clean()
-    activate Miembro
-    Miembro --> Revision: autor válido del mismo proyecto
-    deactivate Miembro
-    Revision -> Revision: calcular_cumple()
-    Revision --> View: r: RevisionMetrica (cumple calculado contra la instantánea)
-    deactivate Revision
-
-    View -> Metrica: esta_aceptada(proyecto)
-    activate Metrica
-    Metrica --> View: aceptada: boolean
-    deactivate Metrica
-
-    View -> Caracteristica: calcular_seguimiento(proyecto)
-    activate Caracteristica
-    Caracteristica --> View: porcentaje: Float (aceptadas / activas * 100)
-    deactivate Caracteristica
-
-    View --> Template: HttpResponse (200, revisión guardada + seguimiento)
-    deactivate View
-    Template --> Encargado: muestra cumplimiento actualizado y seguimiento de la característica
 end
-
 deactivate View
 
 opt El encargado cancela
     Encargado -> Template: cancelar()
-    Template --> Encargado: conserva la revisión anterior, sin cambios
+    Template --> Encargado: Vuelve a métricas sin enviar POST
 end
+
+== Descargar un archivo del historial ==
+
+Encargado -> Template: descargar_archivo(proyecto_id, revision_id)
+Template -> Descarga: get(request, proyecto_id, revision_id)
+activate Descarga
+note right of Descarga
+  Consulta RevisionMetrica por revisión y proyecto.
+  Incluye aplicaciones históricas del modelo.
+  Abre el archivo usando su almacenamiento.
+end note
+alt Revisión ajena, inexistente o archivo ausente
+    Descarga --> Template: HttpResponse (404)
+else Archivo disponible
+    Descarga --> Template: FileResponse (200, archivo adjunto)
+    Template --> Encargado: Archivo de evidencia descargado
+end
+deactivate Descarga
 
 @enduml

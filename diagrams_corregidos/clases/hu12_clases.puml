@@ -1,0 +1,70 @@
+@startuml hu12_clases
+allowmixing
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam packageStyle rectangle
+top to bottom direction
+
+title Clases: consultar pasos de una técnica QA (HU-12)
+
+actor "Encargado de QA" as Encargado
+
+package "tecnicas.template" {
+  class DetalleTecnicaTemplate {
+    + abrir(tecnica_id: int): void
+  }
+}
+
+package "tecnicas.view" {
+  class DetalleTecnicaView {
+    + get(request: HttpRequest, tecnica_id: int): HttpResponse
+    + obtener_tecnica(tecnica_id: int): TecnicaQA
+    + obtener_pasos(tecnica: TecnicaQA): QuerySet<Paso>
+  }
+}
+
+package "tecnicas.model" {
+  class TecnicaQA {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - objetivo: String
+    - pregunta_clave: String
+    - dimension: String
+    - tipo_control: String
+    + obtener_pasos(): QuerySet<Paso>
+  }
+
+  class Paso {
+    - id: int
+    - orden: int
+    - instruccion: String
+    - evidencia_esperada: String
+  }
+}
+
+Encargado ..> DetalleTecnicaTemplate : consulta
+DetalleTecnicaTemplate ..> DetalleTecnicaView : solicita detalle
+DetalleTecnicaView ..> TecnicaQA : obtiene técnica y pasos
+TecnicaQA "1" *-- "0..*" Paso : instrucciones ordenadas
+
+note bottom of Paso
+  Meta.ordering = ['orden'].
+  El orden es único dentro de cada técnica.
+  Cada paso del catálogo base tiene instrucción
+  y evidencia esperada completas.
+end note
+
+note bottom of DetalleTecnicaView
+  Renderiza tecnicas/detalle_tecnica.html.
+  Una técnica inexistente responde HTTP 404.
+  La consulta funciona sin proyecto seleccionado.
+  Una técnica propia sin pasos muestra estado vacío.
+end note
+
+note bottom of TecnicaQA
+  El catálogo base incluye ocho técnicas,
+  dos por dimensión, todas con pasos definidos.
+  El detalle expone objetivo y pregunta clave.
+end note
+@enduml

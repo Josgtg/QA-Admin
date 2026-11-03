@@ -1,7 +1,11 @@
+import tempfile
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -77,6 +81,255 @@ class ModelosBaseTests(TestCase):
                 'Soporte',
             },
         )
+
+    def test_metricas_base_tienen_rangos_admisibles(self):
+        """El catálogo distingue porcentajes, encuesta y valores no negativos."""
+        for metrica in Metrica.objects.all():
+            with self.subTest(metrica=str(metrica)):
+                if metrica.nombre == 'Satisfacción de usuarios':
+                    esperado = (1, 5)
+                elif metrica.unidad == '%':
+                    esperado = (0, 100)
+                else:
+                    esperado = (0, None)
+                self.assertEqual(
+                    (metrica.valor_min, metrica.valor_max), esperado
+                )
+
+
+class DescargarEvidenciaMetricaViewTests(TestCase):
+    """Carga, consulta y descarga de evidencias de HU-01 por proyecto."""
+
+    def setUp(self):
+        """Registra un archivo real usando el formulario de medición."""
+        temporal = tempfile.TemporaryDirectory()
+        self.addCleanup(temporal.cleanup)
+        configuracion = override_settings(MEDIA_ROOT=temporal.name)
+        configuracion.enable()
+        self.addCleanup(configuracion.disable)
+        self.proyecto = crear_proyecto()
+        miembro = crear_miembro(self.proyecto)
+        aplicado = self.proyecto.aplicar_modelo(
+            ModeloCalidad.objects.get(nombre='McCall')
+        )
+        self.metrica = aplicado.metricas_aplicadas().get(
+            metrica__nombre='Requisitos implementados correctamente'
+        ).metrica
+        self.url_registro = reverse(
+            'reportes:registrar_revision',
+            args=[self.proyecto.pk, self.metrica.pk],
+        )
+        self.contenido = b'Evidencia de la medicion.'
+        respuesta = self.client.post(self.url_registro, {
+            'valor': 95,
+            'fecha': timezone.localdate().isoformat(),
+            'miembro_proyecto': miembro.pk,
+            'archivo': SimpleUploadedFile(
+                'evidencia.txt', self.contenido, content_type='text/plain'
+            ),
+        })
+        self.assertEqual(respuesta.status_code, 302)
+        self.revision = self.proyecto.revisiones().get()
+        self.url = reverse(
+            'reportes:descargar_evidencia_metrica',
+            args=[self.proyecto.pk, self.revision.pk],
+        )
+
+    @override_settings(DEBUG=False)
+    def test_descarga_desde_ambas_pantallas_de_historial(self):
+        """El enlace sirve los bytes guardados sin depender del servidor media."""
+        for url in [
+            self.url_registro,
+            reverse('reportes:metricas', args=[self.proyecto.pk]),
+        ]:
+            with self.subTest(pantalla=url):
+                self.assertContains(
+                    self.client.get(url), f'href="{self.url}"'
+                )
+        respuesta = self.client.get(self.url)
+        self.addCleanup(respuesta.close)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(b''.join(respuesta.streaming_content), self.contenido)
+        self.assertEqual(
+            respuesta['Content-Disposition'],
+            'attachment; filename="evidencia.txt"',
+        )
+
+    def test_conserva_descarga_tras_cambiar_de_modelo(self):
+        """La evidencia histórica sigue disponible al cerrar su aplicación."""
+        self.proyecto.aplicar_modelo(
+            ModeloCalidad.objects.get(nombre='FURPS')
+        )
+        respuesta = self.client.get(self.url)
+        self.addCleanup(respuesta.close)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(b''.join(respuesta.streaming_content), self.contenido)
+
+    def test_revision_de_otro_proyecto_devuelve_404(self):
+        """Una revisión no puede descargarse bajo la ruta de otro proyecto."""
+        otro = crear_proyecto('Otro')
+        url = reverse(
+            'reportes:descargar_evidencia_metrica',
+            args=[otro.pk, self.revision.pk],
+        )
+        self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_revision_inexistente_devuelve_404(self):
+        """Un identificador desconocido devuelve un error de recurso ausente."""
+        url = reverse(
+            'reportes:descargar_evidencia_metrica',
+            args=[self.proyecto.pk, self.revision.pk + 1],
+        )
+        self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_archivo_ausente_del_almacenamiento_devuelve_404(self):
+        """Un archivo perdido se comunica como recurso ausente."""
+        self.revision.archivo.storage.delete(self.revision.archivo.name)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_evidencia_solo_con_enlace_devuelve_404_para_archivo(self):
+        """Una revisión con enlace conserva su acceso externo en el historial."""
+        self.revision.enlace = 'https://ejemplo.test/evidencia'
+        self.revision.archivo.delete(save=False)
+        self.revision.save()
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.assertContains(
+            self.client.get(self.url_registro),
+            'href="https://ejemplo.test/evidencia"',
+        )
+
+    def test_muestra_enlace_y_archivo_cuando_existen_ambos(self):
+        """Ambas evidencias quedan accesibles si se registran juntas."""
+        self.revision.enlace = 'https://ejemplo.test/evidencia'
+        self.revision.save()
+        respuesta = self.client.get(self.url_registro)
+        self.assertContains(respuesta, 'href="https://ejemplo.test/evidencia"')
+        self.assertContains(respuesta, f'href="{self.url}"')
+
+
+class RangosRegistroMetricaViewTests(TestCase):
+    """Los rangos del catálogo se aplican al registrar una revisión normal."""
+
+    def test_registro_acepta_limites_y_rechaza_valores_fuera_de_rango(self):
+        """Valida porcentajes, encuesta y mínimos sin confundir rango y meta."""
+        proyecto = crear_proyecto()
+        miembro = crear_miembro(proyecto)
+        casos = [
+            ('McCall', 'Requisitos implementados correctamente',
+             [0, 100], [-1, 101, 150]),
+            ('FURPS', 'Satisfacción de usuarios', [1, 5], [0, 6]),
+            ('McCall', 'Defectos críticos abiertos', [0, 250], [-1]),
+            ('Boehm', 'Tiempo de respuesta', [0, 123], [-1]),
+        ]
+        for modelo, nombre_metrica, validos, invalidos in casos:
+            aplicado = proyecto.aplicar_modelo(
+                ModeloCalidad.objects.get(nombre=modelo)
+            )
+            metrica = aplicado.metricas_aplicadas().get(
+                metrica__nombre=nombre_metrica
+            ).metrica
+            url = reverse(
+                'reportes:registrar_revision', args=[proyecto.pk, metrica.pk]
+            )
+            for valor in validos + invalidos:
+                with self.subTest(metrica=nombre_metrica, valor=valor):
+                    anteriores = metrica.revisiones(proyecto).count()
+                    respuesta = self.client.post(url, {
+                        'valor': valor,
+                        'fecha': timezone.localdate().isoformat(),
+                        'miembro_proyecto': miembro.pk,
+                        'enlace': 'https://ejemplo.test/evidencia',
+                    })
+                    if valor in validos:
+                        self.assertEqual(respuesta.status_code, 302)
+                        self.assertEqual(
+                            metrica.revisiones(proyecto).count(), anteriores + 1
+                        )
+                    else:
+                        self.assertContains(
+                            respuesta, 'fuera del rango admisible'
+                        )
+                        self.assertEqual(
+                            metrica.revisiones(proyecto).count(), anteriores
+                        )
+
+
+class RangosBaseMigrationTests(TransactionTestCase):
+    """La actualización de rangos conserva datos de instalaciones anteriores."""
+
+    def test_migracion_conserva_limites_propios_y_revisiones(self):
+        """Completa rangos vacíos sin alterar límites parciales ni historial."""
+        executor = MigrationExecutor(connection)
+        finales = executor.loader.graph.leaf_nodes()
+        executor.migrate([('modelos', '0002_modelos_base')])
+        self.addCleanup(
+            lambda: MigrationExecutor(connection).migrate(finales)
+        )
+        estado = executor.loader.project_state(
+            [('modelos', '0002_modelos_base')]
+        ).apps
+        MetricaAnterior = estado.get_model('modelos', 'Metrica')
+        MetricaAnterior.objects.update(valor_min=None, valor_max=None)
+        con_limites = MetricaAnterior.objects.get(
+            nombre='Requisitos implementados correctamente'
+        )
+        con_limites.valor_min = 10
+        con_limites.valor_max = 90
+        con_limites.save()
+        parcial = MetricaAnterior.objects.get(nombre='Disponibilidad')
+        parcial.valor_min = 20
+        parcial.save()
+        propia = MetricaAnterior.objects.create(
+            caracteristica_id=con_limites.caracteristica_id,
+            nombre='Métrica propia',
+            unidad='%',
+        )
+        ProyectoAnterior = estado.get_model('reportes', 'Proyecto')
+        PersonaAnterior = estado.get_model('reportes', 'Persona')
+        MiembroAnterior = estado.get_model('reportes', 'MiembroProyecto')
+        ModeloAnterior = estado.get_model('modelos', 'ModeloCalidad')
+        AplicacionAnterior = estado.get_model('modelos', 'ModeloAplicado')
+        InstantaneaAnterior = estado.get_model('modelos', 'MetricaAplicada')
+        RevisionAnterior = estado.get_model('modelos', 'RevisionMetrica')
+        proyecto = ProyectoAnterior.objects.create(
+            nombre='Histórico',
+            fecha_inicio=timezone.localdate(),
+            fecha_fin=timezone.localdate(),
+        )
+        miembro = MiembroAnterior.objects.create(
+            proyecto=proyecto,
+            persona=PersonaAnterior.objects.create(nombre='Ana'),
+            rol='QA',
+        )
+        aplicado = AplicacionAnterior.objects.create(
+            proyecto=proyecto,
+            modelo_calidad=ModeloAnterior.objects.get(nombre='McCall'),
+        )
+        instantanea = InstantaneaAnterior.objects.create(
+            modelo_aplicado=aplicado, metrica=con_limites, umbral=90
+        )
+        revision = RevisionAnterior.objects.create(
+            metrica_aplicada=instantanea,
+            miembro_proyecto=miembro,
+            valor=150,
+            cumple=True,
+            enlace='https://ejemplo.test/historica',
+        )
+
+        MigrationExecutor(connection).migrate(finales)
+
+        con_limites.refresh_from_db()
+        parcial.refresh_from_db()
+        propia.refresh_from_db()
+        revision.refresh_from_db()
+        self.assertEqual((con_limites.valor_min, con_limites.valor_max), (10, 90))
+        self.assertEqual((parcial.valor_min, parcial.valor_max), (20, None))
+        self.assertEqual((propia.valor_min, propia.valor_max), (None, None))
+        porcentaje = MetricaAnterior.objects.get(nombre='Funciones documentadas')
+        self.assertEqual((porcentaje.valor_min, porcentaje.valor_max), (0, 100))
+        self.assertEqual(revision.valor, 150)
+        self.assertTrue(revision.cumple)
+        self.assertEqual(revision.enlace, 'https://ejemplo.test/historica')
 
 
 class MetricaTests(TestCase):

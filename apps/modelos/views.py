@@ -1,6 +1,14 @@
+from pathlib import Path
+
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBadRequest,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
@@ -16,6 +24,7 @@ from .models import (
     Metrica,
     MetricaAplicada,
     ModeloCalidad,
+    RevisionMetrica,
 )
 
 
@@ -94,22 +103,32 @@ class AplicarModeloView(View):
         if vigente is not None and vigente.modelo_calidad_id == modelo.pk:
             return self._render(request, proyecto)
 
-        if self.solicitar_confirmacion(proyecto, modelo) and not confirmado:
-            return self._render(
-                request,
-                proyecto,
-                modelo=modelo,
-                requiere_confirmacion=True,
-            )
-
         try:
-            proyecto.aplicar_modelo(modelo)
+            proyecto.aplicar_modelo(
+                modelo,
+                verificar_confirmacion=True,
+                contexto_confirmacion=(
+                    request.POST.get('contexto_confirmacion')
+                    if confirmado else None
+                ),
+            )
         except ValidationError as error:
+            requiere_confirmacion = (
+                getattr(error, 'code', None) == 'confirmacion_requerida'
+            )
             return self._render(
                 request,
                 proyecto,
                 modelo=modelo,
-                error=error.messages[0],
+                requiere_confirmacion=requiere_confirmacion,
+                contexto_confirmacion=(
+                    error.params['contexto_confirmacion']
+                    if requiere_confirmacion else ''
+                ),
+                error=(
+                    error.messages[0]
+                    if confirmado or not requiere_confirmacion else None
+                ),
             )
 
         messages.success(
@@ -121,21 +140,13 @@ class AplicarModeloView(View):
     def obtener_modelo_aplicado_vigente(self, proyecto):
         return proyecto.modelo_aplicado_vigente()
 
-    def solicitar_confirmacion(self, proyecto, modelo):
-        """Pide confirmación si cambia el modelo y ya hay mediciones."""
-        vigente = self.obtener_modelo_aplicado_vigente(proyecto)
-        if vigente is None:
-            return False
-        if vigente.modelo_calidad_id == modelo.pk:
-            return False
-        return proyecto.tiene_mediciones()
-
     def _render(
         self,
         request,
         proyecto,
         modelo=None,
         requiere_confirmacion=False,
+        contexto_confirmacion='',
         error=None,
     ):
         vigente = self.obtener_modelo_aplicado_vigente(proyecto)
@@ -148,9 +159,37 @@ class AplicarModeloView(View):
                 'modelo': modelo,
                 'vigente': vigente,
                 'requiere_confirmacion': requiere_confirmacion,
+                'contexto_confirmacion': contexto_confirmacion,
                 'error': error,
                 'tiene_mediciones': proyecto.tiene_mediciones(),
             },
+        )
+
+
+class DescargarEvidenciaMetricaView(View):
+    """Descarga el archivo de una revisión del proyecto, incluso histórica."""
+
+    def get(
+        self, request: HttpRequest, proyecto_id: int, revision_id: int
+    ) -> HttpResponse:
+        """Resuelve la revisión y entrega el archivo desde su almacenamiento."""
+        revision = get_object_or_404(
+            RevisionMetrica,
+            pk=revision_id,
+            metrica_aplicada__modelo_aplicado__proyecto_id=proyecto_id,
+        )
+        if not revision.archivo:
+            raise Http404('Esta revisión no tiene un archivo de evidencia.')
+        try:
+            archivo = revision.archivo.open('rb')
+        except FileNotFoundError as error:
+            raise Http404(
+                'El archivo de evidencia ya no está disponible.'
+            ) from error
+        return FileResponse(
+            archivo,
+            as_attachment=True,
+            filename=Path(revision.archivo.name).name,
         )
 
 
