@@ -1,0 +1,43 @@
+{% comment %}
+Tarjeta de una métrica del catálogo base (HU-09).
+
+Muestra nombre, descripción, forma de medirla, unidad y rango esperado. Es de
+solo lectura: no incluye acciones de edición. El umbral se muestra como
+información secundaria (vive en ``ModeloMetrica``, nunca en la métrica).
+{% endcomment %}
+<section class="card model-card section-gap">
+    <div class="card-head">
+        <div>
+            <h3>{{ metrica.nombre }}</h3>
+            {% if metrica.descripcion %}
+            <p class="model-description">{{ metrica.descripcion }}</p>
+            {% endif %}
+        </div>
+        {% if metrica.unidad %}
+        <span class="head-muted">{{ metrica.unidad }}</span>
+        {% endif %}
+    </div>
+
+    <dl class="detail-list">
+        <dt>Forma de medición</dt>
+        <dd>{{ metrica.forma_medicion|default:"Sin definir" }}</dd>
+
+        <dt>Rango esperado</dt>
+        <dd>
+            {% with rango=metrica.rango_esperado %}{% if rango %}{{ rango }}{% else %}<span class="muted">Sin límites definidos</span>{% endif %}{% endwith %}
+        </dd>
+
+        <dt>Umbral por modelo</dt>
+        <dd>
+            {% for modelo_metrica in metrica.umbrales_por_modelo %}
+            <div class="cell-sub">
+                {{ modelo_metrica.modelo_calidad.nombre }}:
+                {% if modelo_metrica.tipo_umbral == 'MINIMO' %}≥{% else %}≤{% endif %}
+                {{ modelo_metrica.umbral|floatformat:'-2' }} {{ metrica.unidad }}
+            </div>
+            {% empty %}
+            <span class="muted">Ningún modelo usa esta métrica todavía.</span>
+            {% endfor %}
+        </dd>
+    </dl>
+</section>

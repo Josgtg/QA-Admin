@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from apps.modelos.views import CatalogoMetricasView
 from apps.reportes.views import InicioView
 from qa_admin.views import demo
 
@@ -27,4 +28,10 @@ urlpatterns = [
     path('tecnicas/', include('apps.tecnicas.urls')),
     path('modelos/', include('apps.modelos.urls')),
     path('proyectos/', include('apps.reportes.urls')),
+    # HU-09: catálogo base de métricas (solo lectura).
+    path(
+        'metricas/catalogo/',
+        CatalogoMetricasView.as_view(),
+        name='catalogo_metricas',
+    ),
 ]

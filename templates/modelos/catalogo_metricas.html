@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% comment %}
+Catálogo base de métricas de calidad (HU-09).
+
+Solo lectura: se agrupan las métricas por característica y se muestran nombre,
+descripción, forma de medición, unidad y rango esperado. Para crear un modelo
+propio a partir de estas métricas está HU-16.
+{% endcomment %}
+
+{% block title %}Catálogo de métricas · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <h2>Catálogo base de métricas</h2>
+        <p class="subtitle">
+            Consulta las métricas de calidad para estudiar un modelo propio.
+            El catálogo es de solo lectura.
+        </p>
+    </div>
+    <div class="actions">
+        <span class="head-muted">
+            {{ metricas|length }} métrica{{ metricas|length|pluralize:"s" }}
+        </span>
+        <a class="btn btn-outline" href="{% url 'modelos:catalogo' %}">
+            <svg class="icon icon-sm"><use href="#i-layers"></use></svg>
+            Ver modelos
+        </a>
+    </div>
+</div>
+
+<form method="get" class="filter-row" action="{% url 'catalogo_metricas' %}">
+    <label class="filter-label" for="caracteristica">Característica</label>
+    <select id="caracteristica" name="caracteristica" class="select-input filter-compact">
+        <option value="">Todas las características</option>
+        {% for item in caracteristicas %}
+        <option value="{{ item.pk }}"
+                {% if caracteristica_seleccionada and item.pk == caracteristica_seleccionada.pk %}selected{% endif %}>
+            {{ item.nombre }}
+        </option>
+        {% endfor %}
+    </select>
+
+    <label class="filter-label" for="modelo">Modelo</label>
+    <select id="modelo" name="modelo" class="select-input filter-compact">
+        <option value="">Sin modelo</option>
+        {% for item in modelos %}
+        <option value="{{ item.pk }}"
+                {% if modelo_seleccionado and item.pk == modelo_seleccionado.pk %}selected{% endif %}>
+            {{ item.nombre }}
+        </option>
+        {% endfor %}
+    </select>
+
+    <label class="filter-label" for="valor">Valor medido</label>
+    <input id="valor" name="valor" type="number" step="any"
+           class="select-input filter-numero"
+           value="{{ valor }}" placeholder="Opcional">
+
+    <label class="filter-label" for="cumple">Conformidad</label>
+    <select id="cumple" name="cumple" class="select-input filter-compact">
+        <option value="">Sin filtro</option>
+        <option value="1" {% if cumple is True %}selected{% endif %}>Cumple</option>
+        <option value="0" {% if cumple is False %}selected{% endif %}>No cumple</option>
+    </select>
+
+    <button class="btn btn-primary btn-sm" type="submit">
+        <svg class="icon icon-sm"><use href="#i-filter"></use></svg>
+        Filtrar
+    </button>
+    <a class="btn btn-outline btn-sm" href="{% url 'catalogo_metricas' %}">Limpiar</a>
+</form>
+
+{% if avisos %}
+{% for aviso in avisos %}
+<div class="notice notice-warning">
+    <svg class="icon"><use href="#i-alert-circle"></use></svg>
+    <p>{{ aviso }}</p>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if con_formula %}
+<div class="notice notice-warning">
+    <svg class="icon"><use href="#i-alert-circle"></use></svg>
+    <p>
+        Filtro informativo sobre «{{ modelo_seleccionado.nombre }}»: {{ con_formula }}.
+        La conformidad real se calcula en el modelo del proyecto (HU-01).
+    </p>
+</div>
+{% endif %}
+
+{% if caracteristica_seleccionada %}
+<p class="muted section-gap">
+    Característica <strong>{{ caracteristica_seleccionada.nombre }}</strong>
+    {% if caracteristica_seleccionada.descripcion %}
+    · {{ caracteristica_seleccionada.descripcion }}
+    {% endif %}
+</p>
+{% endif %}
+
+{% for caracteristica_id, grupo in agrupadas %}
+<section class="section-gap">
+    <div class="card-head">
+        <div>
+            <h3>{{ grupo.nombre }}</h3>
+            {% if grupo.descripcion %}
+            <p class="muted">{{ grupo.descripcion }}</p>
+            {% endif %}
+        </div>
+        <span class="head-muted">
+            {{ grupo.metricas|length }} métrica{{ grupo.metricas|length|pluralize:"s" }}
+        </span>
+    </div>
+    {% for metrica in grupo.metricas %}
+        {% include 'modelos/_tarjeta_metrica.html' with metrica=metrica %}
+    {% endfor %}
+</section>
+{% empty %}
+<section class="card empty-state">
+    <svg class="icon empty-icon"><use href="#i-metrics"></use></svg>
+    <h3>No hay métricas para este filtro</h3>
+    <p>Prueba con otra característica o limpia los filtros.</p>
+</section>
+{% endfor %}
+{% endblock %}

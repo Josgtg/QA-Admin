@@ -19,6 +19,8 @@ def item_activo(match):
 
     if match.url_name in ('tablero', 'inicio'):
         return 'dashboard'
+    if match.url_name == 'catalogo_metricas':
+        return 'catalogo_metricas'
     if match.namespace == 'modelos':
         return 'modelos'
     if match.app_name == 'reportes':
