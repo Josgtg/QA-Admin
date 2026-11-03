@@ -16,14 +16,12 @@ box "Model Layer"
   participant "ModeloCalidad" as Modelo
   participant "p: Proyecto" as Proyecto
   participant "ma_vigente: ModeloAplicado" as AplicacionVigente
-  participant "ma_nueva: ModeloAplicado" as NuevaAplicacion
-  participant "MetricaAplicada" as Instantanea
 end box
 
 == Seleccionar y aplicar modelo de calidad (HU-02) ==
 
-Encargado -> UI: abrir(proyectoId)
-UI -> View: get(request, proyectoId)
+Encargado -> UI: abrir(proyecto_id)
+UI -> View: get(request, proyecto_id)
 activate View
 
 View -> Modelo: obtener_predefinidos()
@@ -35,9 +33,10 @@ View --> UI: HttpResponse (200, modelos)
 deactivate View
 UI --> Encargado: Muestra modelos, descripciones y características
 
-Encargado -> UI: seleccionar(modelo_id, confirmacion)
+Encargado -> UI: seleccionar(modelo_id, confirmacion, contexto_confirmacion)
 note right of UI
-  request.POST contiene modelo_id y confirmacion.
+  request.POST contiene modelo_id, confirmacion
+  y el contexto firmado recibido en el aviso.
   modelo es el ModeloCalidad predefinido seleccionado.
 end note
 UI -> View: post(request, proyecto_id)
@@ -48,41 +47,68 @@ activate Proyecto
 Proyecto --> View: anterior: ModeloAplicado o null
 deactivate Proyecto
 
-View -> Proyecto: tiene_mediciones()
-activate Proyecto
-Proyecto --> View: hay_mediciones: boolean
-deactivate Proyecto
-
 alt Mismo modelo ya vigente
     View --> UI: HttpResponse (200, anterior; sin cambios)
     UI --> Encargado: Modelo, características y métricas
-else Modelo diferente vigente, con mediciones y sin confirmación
-    View --> UI: HttpResponse (200, requiere_confirmacion=true)
-    UI --> Encargado: Confirma o cancela
-    note right of UI
-      Confirmar inicia otro POST con confirmacion=true.
-      Esta petición termina sin guardar cambios.
-    end note
-else Primera aplicación, cambio sin mediciones o cambio confirmado
-    View -> Proyecto: aplicar_modelo(modelo)
+else Aplicar o cambiar el modelo
+    View -> Proyecto: aplicar_modelo(modelo, verificar_confirmacion=true, contexto_confirmacion)
     activate Proyecto
-    opt Existe aplicación anterior
-        Proyecto -> AplicacionVigente: cerrar()
-        AplicacionVigente --> Proyecto: void (anterior conservada, vigente=false)
+    note right of Proyecto
+      Comienza la transacción.
+      Un UPDATE del propio valor reserva la escritura
+      antes de leer el estado vigente, también en SQLite.
+    end note
+    Proyecto -> Proyecto: modelo_aplicado_vigente()
+    Proyecto --> Proyecto: anterior: ModeloAplicado o null
+    alt Otra solicitud ya aplicó el mismo modelo
+        Proyecto --> View: vigente: ModeloAplicado (sin duplicar)
+        View --> UI: HttpResponse (302, URL del detalle del proyecto)
+    else El modelo es diferente
+    Proyecto -> Proyecto: tiene_mediciones()
+    Proyecto --> Proyecto: hay_mediciones: boolean
+
+    opt Contexto presente o cambio de modelo con mediciones
+        Proyecto -> Proyecto: validar_confirmacion_modelo(modelo, anterior, contexto_confirmacion)
+        note right of Proyecto
+          Comprueba firma, antigüedad máxima de 30 minutos
+          y coincidencia de proyecto, destino y aplicación.
+        end note
+        Proyecto --> Proyecto: void o ValidationError(contexto_nuevo)
     end
-    create participant "nueva: ModeloAplicado" as Nueva
-    Proyecto -> Nueva: ModeloAplicado(proyecto, modelo)
-    activate Nueva
-    Nueva -> Instantanea: crear_instantanea()
-    activate Instantanea
-    Instantanea --> Nueva: metricas_aplicadas: List<MetricaAplicada>
-    deactivate Instantanea
-    Nueva --> Proyecto: nueva: ModeloAplicado (vigente=true)
-    deactivate Nueva
-    Proyecto --> View: nueva: ModeloAplicado
+
+    alt Falta confirmar, contexto alterado, vencido o estado distinto
+        Proyecto --> View: ValidationError (requiere_confirmacion, contexto_nuevo)
+        note right of Proyecto
+          Rollback y fin de la transacción.
+          Se conservan aplicación e historial.
+        end note
+        View --> UI: HttpResponse (200, aviso y contexto_nuevo)
+        UI --> Encargado: Revisa el modelo vigente y confirma o cancela
+        note right of UI
+          Confirmar inicia otro POST independiente con
+          confirmacion=1 y contexto_confirmacion.
+        end note
+    else Modelo válido y confirmación válida cuando es necesaria
+        opt Existe aplicación anterior y el modelo es diferente
+            Proyecto -> AplicacionVigente: cerrar()
+            AplicacionVigente --> Proyecto: void (vigente=false)
+        end
+        create participant "nueva: ModeloAplicado" as Nueva
+        Proyecto -> Nueva: ModeloAplicado(proyecto, modelo)
+        Nueva --> Proyecto: nueva: ModeloAplicado (vigente=true)
+        Proyecto -> Nueva: crear_instantanea()
+        Nueva --> Proyecto: metricas_aplicadas: List<MetricaAplicada>
+        note right of Proyecto
+          Commit al completar la operación.
+          Un fallo de escritura revierte cierre,
+          aplicación e instantáneas.
+        end note
+        Proyecto --> View: nueva o vigente: ModeloAplicado
+        View --> UI: HttpResponse (302, URL del detalle del proyecto)
+        UI --> Encargado: Muestra modelo, características y métricas
+    end
+    end
     deactivate Proyecto
-    View --> UI: HttpResponse (302, URL del detalle del proyecto)
-    UI --> Encargado: Muestra modelo, características y métricas
 end
 
 deactivate View
