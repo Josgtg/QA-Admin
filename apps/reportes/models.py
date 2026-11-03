@@ -149,14 +149,12 @@ class Proyecto(models.Model):
 
     def estado_metricas(self):
         """Cada métrica activa con su nombre y 100 si cumple o 0 si no."""
+        from apps.modelos.models import Metrica
+
         aplicado = self.modelo_aplicado_vigente()
         if aplicado is None:
             return []
-        ultimos = {}
-        for metrica_id, valor in self.revisiones().order_by(
-            '-fecha', '-pk'
-        ).values_list('metrica_aplicada__metrica_id', 'valor'):
-            ultimos.setdefault(metrica_id, valor)
+        ultimos = Metrica.ultimos_valores_por_metrica(self)
         return [
             (
                 instantanea.metrica.nombre,
@@ -218,11 +216,9 @@ class Proyecto(models.Model):
 
     def revisiones(self):
         """Revisiones del proyecto vía ModeloAplicado -> MetricaAplicada."""
-        from apps.modelos.models import RevisionMetrica
+        from apps.modelos.models import Metrica
 
-        return RevisionMetrica.objects.filter(
-            metrica_aplicada__modelo_aplicado__proyecto=self
-        ).select_related(
+        return Metrica.revisiones_de_proyecto(self).select_related(
             'metrica_aplicada__metrica',
             'miembro_proyecto__persona',
         )

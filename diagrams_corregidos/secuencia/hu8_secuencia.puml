@@ -1,0 +1,85 @@
+@startuml
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer"
+participant "MetricasProyectoTemplate" as Lista
+participant "HistorialMetricaTemplate" as Detalle
+end box
+
+box "View Layer (reportes.view)"
+participant "MetricasProyectoView" as VistaLista
+participant "resumen_metricas()" as Resumen
+end box
+
+box "Model Layer"
+participant "p: Proyecto" as Proyecto
+participant "a: ModeloAplicado" as Aplicado
+participant "m: Metrica" as Metrica
+participant "ma: MetricaAplicada" as Instantanea
+participant "r: RevisionMetrica" as Revision
+end box
+
+== Estado de las metricas del proyecto (HU-08) ==
+
+Encargado -> Lista: Abre las metricas del proyecto
+Lista -> VistaLista: get(req, proyecto_id)
+activate VistaLista
+
+VistaLista -> Proyecto: modelo_aplicado_vigente()
+activate Proyecto
+Proyecto --> VistaLista: a o null
+deactivate Proyecto
+
+alt no hay modelo aplicado
+    VistaLista --> Lista: HttpResponse (200 OK, estado vacio)
+else hay modelo vigente
+    VistaLista -> Resumen: resumen_metricas(p, a)
+    activate Resumen
+
+    Resumen -> Aplicado: metricas_aplicadas()
+    activate Aplicado
+    Aplicado --> Resumen: List<MetricaAplicada>
+    deactivate Aplicado
+
+    loop por cada instantanea ma
+        Resumen -> Metrica: ultima_revision(p)
+        activate Metrica
+        Metrica --> Resumen: r o null
+        deactivate Metrica
+
+        Resumen -> Metrica: esta_aceptada(p)
+        activate Metrica
+        Metrica -> Instantanea: instantanea_vigente(p)
+        Instantanea --> Metrica: ma
+        Metrica --> Resumen: boolean
+        deactivate Metrica
+
+        Resumen -> Metrica: revisiones(p)[:10]
+        activate Metrica
+        Metrica --> Resumen: List<RevisionMetrica>
+        deactivate Metrica
+    end
+
+    Resumen --> VistaLista: List<Fila>
+    deactivate Resumen
+
+    VistaLista --> Lista: HttpResponse (200 OK)
+end
+deactivate VistaLista
+
+Lista --> Encargado: Una tarjeta por metrica con ultimo valor, umbral y estado; "No cumple" en rojo
+
+== Historial embebido de una metrica (HU-08) ==
+
+Encargado -> Lista: Expande "Ver historial"
+Lista -> Detalle: renderiza el parcial embebido
+activate Detalle
+Detalle --> Lista: Tabla de revisiones o aviso de historial vacio
+deactivate Detalle
+
+Lista --> Encargado: Fecha, valor, estado, evidencia y autor de cada revision
+
+@enduml

@@ -508,6 +508,85 @@ input {
     border-color: #f5dfb0;
 }
 
+/* Metric cards -------------------------------------------------------- */
+.metric-cards {
+    display: grid;
+    gap: 20px;
+    max-width: 920px;
+}
+
+.metric-cards-head {
+    max-width: 920px;
+}
+
+.metric-card {
+    padding: 18px;
+}
+
+.metric-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.metric-card-head h3 {
+    margin: 0;
+    color: #1f2937;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.metric-card-sub {
+    margin: 4px 0 0;
+}
+
+.metric-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #f1f2f4;
+}
+
+.metric-stat-label {
+    display: block;
+    color: var(--muted);
+    font-size: 10.5px;
+}
+
+.metric-stat-value {
+    display: block;
+    margin-top: 4px;
+    color: #1f2937;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.metric-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #f1f2f4;
+}
+
+.metric-history {
+    margin-top: 10px;
+}
+
+.metric-history summary {
+    cursor: pointer;
+    font-size: 11.5px;
+}
+
+.history-embedded {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f1f2f4;
+}
+
 .metric-top {
     display: flex;
     align-items: center;

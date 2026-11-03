@@ -181,11 +181,27 @@ class Metrica(models.Model):
             return False
         return True
 
+    @classmethod
+    def revisiones_de_proyecto(cls, proyecto):
+        """Revisiones de todas las métricas en las aplicaciones del proyecto."""
+        return RevisionMetrica.objects.filter(
+            metrica_aplicada__modelo_aplicado__proyecto=proyecto,
+        )
+
+    @classmethod
+    def ultimos_valores_por_metrica(cls, proyecto):
+        """Último valor de cada métrica, buscando en todas las aplicaciones."""
+        ultimos = {}
+        for metrica_id, valor in cls.revisiones_de_proyecto(proyecto).order_by(
+            '-fecha', '-pk'
+        ).values_list('metrica_aplicada__metrica_id', 'valor'):
+            ultimos.setdefault(metrica_id, valor)
+        return ultimos
+
     def revisiones(self, proyecto):
         """Revisiones de la métrica en **todas** las aplicaciones del proyecto."""
-        return RevisionMetrica.objects.filter(
+        return self.revisiones_de_proyecto(proyecto).filter(
             metrica_aplicada__metrica=self,
-            metrica_aplicada__modelo_aplicado__proyecto=proyecto,
         ).select_related('metrica_aplicada', 'miembro_proyecto__persona')
 
     def ultima_revision(self, proyecto):
@@ -313,7 +329,7 @@ class ModeloAplicado(models.Model):
     def crear_instantanea(self):
         """Copia cada ``ModeloMetrica`` a una ``MetricaAplicada`` inmutable."""
         for modelo_metrica in self.modelo_calidad.modelo_metricas.all():
-            MetricaAplicada.objects.update_or_create(
+            MetricaAplicada.objects.get_or_create(
                 modelo_aplicado=self,
                 metrica=modelo_metrica.metrica,
                 defaults={
@@ -382,6 +398,14 @@ class MetricaAplicada(models.Model):
 
     def __str__(self):
         return f'{self.modelo_aplicado} · {self.metrica}'
+
+    def save(self, *args, **kwargs):
+        """La instantánea no se modifica tras crearse (HU-02/HU-08)."""
+        if not self._state.adding:
+            raise ValidationError(
+                'La instantánea de una métrica no se puede modificar.'
+            )
+        return super().save(*args, **kwargs)
 
     def evaluar_cumplimiento(self, valor):
         if valor is None:

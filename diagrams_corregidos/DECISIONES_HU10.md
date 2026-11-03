@@ -27,7 +27,7 @@ aceptación:
 
 1. **Fecha declarada por el usuario**: `Evidencia.fecha` (DateField con valor
    inicial de hoy) además de `fecha_registro`.
-2. **Validación de formato y tamaño**: `apps/tecnicas/validators.py`
+2. **Validación de formato y tamaño**: `../apps/tecnicas/validators.py`
    (PDF, PNG, JPG, DOCX, XLSX y TXT; máximo 5 MB) aplicado al campo `archivo`
    y al formulario, con mensajes que indican qué se acepta.
 3. **Apertura posterior**: `AbrirEvidenciaView` en
@@ -45,7 +45,7 @@ aceptación:
 | CA-3 | Rechaza formato o tamaño no permitido e indica qué se acepta. | `validators.py` en `Evidencia.archivo` y en el formulario; mensajes con formatos y 5 MB |
 | CA-4 | El paso queda completado con fecha y autor; la evidencia se abre después. | `marcar_completado()` guarda `fecha_completado`; el autor es `miembro_proyecto`; `AbrirEvidenciaView` |
 
-## 3. Diagrama de clases (`hu10_clases.puml`)
+## 3. Diagrama de clases (`clases/hu10_clases.puml`)
 
 | Clase | Paquete | Responsabilidad |
 | --- | --- | --- |
@@ -71,7 +71,7 @@ Reglas en notas:
 5. `fecha` la declara el usuario; `fecha_registro` la sella el alta.
 6. Formatos y tamaño máximo del archivo.
 
-## 4. Diagrama de secuencia (`hu10_secuencia.puml`)
+## 4. Diagrama de secuencia (`secuencia/hu10_secuencia.puml`)
 
 1. **Consulta**: `get` → `obtener_paso()` → formulario.
 2. **Registro**: `post` → `obtener_paso()` → `EvidenciaForm.is_valid()`; si es
@@ -112,7 +112,7 @@ Reglas en notas:
 - `python manage.py makemigrations --check --dry-run`: sin cambios.
 - `python manage.py test`: **159 pruebas en verde** (37 de la app técnicas,
   7 nuevas para fecha, archivo y apertura de la evidencia).
-- Base local recreada (`db.sqlite3` borrada y `migrate` aplicado), como pidió
+- Base local recreada (`../db.sqlite3` borrada y `migrate` aplicado), como pidió
   el equipo por el cambio de esquema.
 
 ## 8. Pendientes

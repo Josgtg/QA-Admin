@@ -263,7 +263,7 @@
                     <span class="tech-status gray">Pendiente</span>
                     {% endif %}
                     <a class="link"
-                       href="{% url 'tecnicas:seguimiento' %}?proyecto={{ proyecto.pk }}">
+                       href="{% url 'tecnicas:estado' seguimiento.tecnica.pk %}">
                         Ver pasos
                     </a>
                 </div>
