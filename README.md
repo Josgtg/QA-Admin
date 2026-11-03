@@ -72,10 +72,20 @@ Rutas disponibles:
 | `/admin/` | Administración de Django |
 | `/demo/` | Demo de la interfaz visual |
 | `/tecnicas/seguimiento/` | Selección de técnicas QA por proyecto (HU-05) |
+<<<<<<< Updated upstream
 | `/modelos/proyecto/` | Modelo de calidad del proyecto activo: abre el ítem «Modelos de Calidad» del menú lateral (HU-02) |
 | `/modelos/` | Catálogo de modelos de calidad predefinidos (HU-03), desde el botón «Ver catálogo de modelos» |
 | `/` | Proyectos agrupados y filtrados por periodo (HU-07) |
 | `/crear/` | Registro de un nuevo proyecto (HU-07) |
+=======
+| `/modelos/` | Catálogo de modelos de calidad predefinidos (HU-03) |
+| `/proyectos/<id>/metricas/` | Estado de las métricas del proyecto (HU-08) |
+| `/proyectos/<id>/metricas/<metrica_id>/` | Historial de mediciones de una métrica (HU-08) |
+| `/proyectos/` | Proyectos agrupados y filtrados por periodo (HU-07) |
+| `/proyectos/crear/` | Registro de un nuevo proyecto (HU-07) |
+| `/proyectos/<id>/` | Tablero del proyecto (HU-07) |
+| `/` | Inicio: redirige al último proyecto abierto o a la lista |
+>>>>>>> Stashed changes
 
 La migración `tecnicas.0004_tecnicas_ejemplo` carga un catálogo base con dos
 técnicas de ejemplo: Revisión de código y Revisión de requisitos.
