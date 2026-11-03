@@ -1,6 +1,13 @@
+import os
+
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
+
+from .validators import (
+    validar_extension_evidencia,
+    validar_tamano_evidencia,
+)
 
 
 class Dimension(models.TextChoices):
@@ -228,6 +235,12 @@ class SeguimientoTecnica(models.Model):
             self.save(update_fields=['porcentaje_avance'])
         return self.porcentaje_avance
 
+    def obtener_pasos(self):
+        """Devuelve los pasos del seguimiento ordenados y con su evidencia."""
+        return self.pasos.select_related('paso', 'evidencia').order_by(
+            'paso__orden'
+        )
+
 
 class SeguimientoPaso(models.Model):
     seguimiento = models.ForeignKey(
@@ -259,12 +272,62 @@ class SeguimientoPaso(models.Model):
     def __str__(self):
         return f'{self.seguimiento} - {self.paso}'
 
+    def evidencia_registrada(self):
+        """Devuelve la evidencia del paso o ``None`` si todavía no existe."""
+        try:
+            return self.evidencia
+        except Evidencia.DoesNotExist:
+            return None
+
+    def tiene_evidencia(self):
+        """Indica si el paso ya cuenta con una evidencia con contenido."""
+        evidencia = self.evidencia_registrada()
+        return evidencia is not None and evidencia.tiene_contenido()
+
     def agregar_evidencia(self, evidencia):
+        """Vincula una evidencia ya construida con este paso."""
         evidencia.seguimiento_paso = self
-        evidencia.save(update_fields=['seguimiento_paso'])
+        evidencia.save()
+        return evidencia
+
+    def registrar_evidencia(
+        self,
+        *,
+        enlace='',
+        archivo=None,
+        fecha=None,
+        comentario='',
+        autor='',
+    ):
+        """Crea la evidencia del paso y lo marca como completado (HU-10)."""
+        if self.completado:
+            raise ValidationError(
+                'El paso ya está completado y tiene evidencia registrada.'
+            )
+        if not enlace and not archivo:
+            raise ValidationError(
+                'Registra un enlace o adjunta un archivo como evidencia.'
+            )
+        evidencia = Evidencia(
+            seguimiento_paso=self,
+            enlace=enlace or '',
+            archivo=archivo or '',
+            fecha=fecha or timezone.localdate(),
+            comentario=comentario or '',
+            autor=autor,
+            tipo=self.seguimiento.tecnica.tipo_control,
+        )
+        evidencia.full_clean()
+        evidencia.save()
+        self.marcar_completado(autor)
         return evidencia
 
     def marcar_completado(self, autor=''):
+        """Completa el paso solo si tiene evidencia y actualiza el avance."""
+        if not self.tiene_evidencia():
+            raise ValidationError(
+                {'evidencia': 'Un paso no se puede completar sin evidencia.'}
+            )
         self.completado = True
         self.fecha_completado = timezone.now()
         if autor:
@@ -272,6 +335,13 @@ class SeguimientoPaso(models.Model):
         self.save(update_fields=['completado', 'fecha_completado', 'autor'])
         self.seguimiento.calcular_avance()
         return self
+
+
+def ruta_evidencia(instance, filename):
+    """Guarda cada archivo en media/evidencias/<paso del seguimiento>/."""
+    if instance.seguimiento_paso_id:
+        return f'evidencias/paso_{instance.seguimiento_paso_id}/{filename}'
+    return f'evidencias/sin_paso/{filename}'
 
 
 class Evidencia(models.Model):
@@ -282,8 +352,23 @@ class Evidencia(models.Model):
         null=True,
         blank=True,
     )
-    url_archivo = models.URLField(max_length=500)
-    tipo = models.CharField(max_length=20, choices=TipoControl.choices)
+    enlace = models.URLField(max_length=500, blank=True)
+    archivo = models.FileField(
+        upload_to=ruta_evidencia,
+        blank=True,
+        max_length=255,
+        validators=[validar_extension_evidencia, validar_tamano_evidencia],
+    )
+    fecha = models.DateField(
+        default=timezone.localdate,
+        verbose_name='fecha de la evidencia',
+    )
+    comentario = models.TextField(blank=True)
+    tipo = models.CharField(
+        max_length=20,
+        choices=TipoControl.choices,
+        blank=True,
+    )
     fecha_registro = models.DateTimeField(auto_now_add=True)
     autor = models.CharField(max_length=150)
 
@@ -293,4 +378,28 @@ class Evidencia(models.Model):
         ordering = ['-fecha_registro']
 
     def __str__(self):
-        return self.url_archivo
+        return self.descripcion()
+
+    def descripcion(self):
+        """Texto breve que identifica la evidencia en la interfaz."""
+        if self.es_archivo():
+            return self.nombre_archivo()
+        return self.enlace or 'Evidencia sin contenido'
+
+    def es_archivo(self):
+        """Indica si la evidencia se guardó como archivo adjunto."""
+        return bool(self.archivo)
+
+    def nombre_archivo(self):
+        """Devuelve el nombre del archivo sin la ruta de almacenamiento."""
+        if not self.es_archivo():
+            return ''
+        return os.path.basename(self.archivo.name)
+
+    def tiene_contenido(self):
+        """Indica si la evidencia aporta un enlace o un archivo."""
+        return self.es_archivo() or bool(self.enlace)
+
+    def abrir_archivo(self):
+        """Abre el archivo adjunto en modo lectura para servirlo."""
+        return self.archivo.open('rb')

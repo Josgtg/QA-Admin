@@ -2,5 +2,8 @@
 __pycache__/
 db.sqlite3
 
+# Evidencias subidas en desarrollo (HU-10)
+/media/
+
 # Contexto local para IA (no versionar)
 /AGENTS.md

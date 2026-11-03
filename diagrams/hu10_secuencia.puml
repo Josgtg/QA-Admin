@@ -1,0 +1,123 @@
+@startuml
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer"
+participant "RegistroEvidenciaTemplate" as UI
+end box
+
+box "View Layer (tecnicas.view)"
+participant "RegistrarEvidenciaView" as View
+participant "AbrirEvidenciaView" as Abrir
+end box
+
+box "Form Layer (tecnicas.form)"
+participant "EvidenciaForm" as Form
+end box
+
+box "Model Layer (tecnicas.model)"
+participant "sp: SeguimientoPaso" as SegPaso
+participant "e: Evidencia" as Evidencia
+participant "st: SeguimientoTecnica" as SegTecnica
+end box
+
+== Consulta de pasos y formulario (HU-10) ==
+
+Encargado -> UI: Abre los pasos de la técnica
+UI -> View: get(req: HttpRequest, seguimiento_id: int)
+activate View
+View -> SegTecnica: obtener_pasos()
+activate SegTecnica
+SegTecnica --> View: List<SeguimientoPaso>
+deactivate SegTecnica
+View --> UI: HttpResponse (200 OK)
+deactivate View
+UI --> Encargado: Muestra los pasos, su evidencia y el formulario
+
+== Registro de la evidencia (HU-10) ==
+
+Encargado -> UI: Adjunta enlace o archivo, fecha, comentario y autor
+UI -> View: post(req: HttpRequest, seguimiento_id: int)
+activate View
+
+View -> View: obtener_paso(seguimiento_id, paso_id)
+note right of View
+  Si el paso no pertenece al seguimiento
+  consultado se responde 404.
+end note
+
+View -> Form: is_valid()
+activate Form
+Form --> View: False (sin enlace ni archivo, formato o tamaño no permitidos)
+deactivate Form
+
+alt "formulario inválido"
+    View --> UI: HttpResponse (200 con errores)
+    UI --> Encargado: Señala el campo y qué se acepta
+    note right of UI
+      Sin enlace ni archivo: «Registra un enlace
+      o adjunta un archivo como evidencia».
+      Archivo: PDF, PNG, JPG, DOCX, XLSX o TXT
+      y máximo 5 MB.
+    end note
+else "formulario válido"
+    View -> SegPaso: registrar_evidencia(enlace, archivo, fecha, comentario, autor)
+    activate SegPaso
+
+    SegPaso -> Evidencia: new(seguimiento_paso, miembro_proyecto, enlace, archivo, fecha)
+    activate Evidencia
+    SegPaso -> Evidencia: tiene_enlace_o_archivo()
+    Evidencia --> SegPaso: true
+    SegPaso -> Evidencia: clean()
+    note right of Evidencia
+      Valida que el autor pertenezca al
+      proyecto del paso.
+    end note
+    SegPaso -> Evidencia: save()
+    deactivate Evidencia
+
+    SegPaso -> SegPaso: marcar_completado()
+    note right of SegPaso
+      Comprueba que exista evidencia y
+      registra fecha_completado.
+    end note
+
+    SegPaso -> SegTecnica: calcular_avance()
+    activate SegTecnica
+    SegTecnica --> SegPaso: porcentaje_avance
+    deactivate SegTecnica
+
+    SegPaso --> View: Evidencia
+    deactivate SegPaso
+
+    View --> UI: HttpResponse (302 Redirect a los pasos)
+    UI --> Encargado: «Evidencia registrada; el paso quedó completado»
+end
+deactivate View
+
+== Apertura de la evidencia ==
+
+Encargado -> UI: Pulsa «Abrir evidencia»
+UI -> Abrir: get(req: HttpRequest, evidencia_id: int)
+activate Abrir
+
+Abrir -> Abrir: obtener_evidencia(evidencia_id)
+
+alt "la evidencia tiene archivo"
+    Abrir -> Evidencia: abrir_archivo()
+    activate Evidencia
+    Evidencia --> Abrir: File
+    deactivate Evidencia
+    Abrir --> UI: FileResponse (200 OK)
+else "la evidencia solo tiene enlace"
+    Abrir --> UI: HttpResponseRedirect (302 al enlace)
+else "sin archivo ni enlace"
+    Abrir --> UI: Http404
+end
+deactivate Abrir
+
+UI --> Encargado: Abre el archivo o el enlace de la evidencia
+
+@enduml

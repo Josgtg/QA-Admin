@@ -1,0 +1,143 @@
+@startuml hu10_clases
+skinparam shadowing false
+skinparam linetype polyline
+skinparam nodesep 45
+skinparam ranksep 55
+skinparam packageStyle rectangle
+
+title Clases: registro de evidencias de un paso de una TQA (HU-10)
+
+package "tecnicas" #E1F5EE {
+  package "template" {
+    class RegistroEvidenciaTemplate {
+    }
+  }
+
+  package "view" {
+    class RegistrarEvidenciaView {
+      + get(req: HttpRequest, seguimiento_id: int): HttpResponse
+      + post(req: HttpRequest, seguimiento_id: int): HttpResponse
+      + obtener_paso(seguimiento_id: int, paso_id: int): SeguimientoPaso
+      + renderizar(req: HttpRequest, formulario: EvidenciaForm, paso_id: int): HttpResponse
+    }
+
+    class AbrirEvidenciaView {
+      + get(req: HttpRequest, evidencia_id: int): HttpResponse
+      + obtener_evidencia(evidencia_id: int): Evidencia
+    }
+  }
+
+  package "form" {
+    class EvidenciaForm {
+      - enlace: URLField
+      - archivo: FileField
+      - fecha: DateField
+      - comentario: String
+      - autor: MiembroProyecto
+      + clean(): Map
+      + is_valid(): boolean
+    }
+  }
+
+  package "model" {
+    class TecnicaQA {
+      - id: int
+      - nombre: String
+      - dimension: Dimension
+      - tipo_control: TipoControl
+      + obtener_pasos(): List<Paso>
+    }
+
+    class Paso {
+      - id: int
+      - orden: int
+      - instruccion: String
+      - evidencia_esperada: String
+    }
+
+    class SeguimientoTecnica {
+      - id: int
+      - porcentaje_avance: Float
+      - activa: boolean
+      + calcular_avance(): Float
+      + obtener_pasos(): List<SeguimientoPaso>
+      + tiene_evidencias_registradas(): boolean
+    }
+
+    class SeguimientoPaso {
+      - id: int
+      - completado: boolean
+      - comentario: String
+      - fecha_completado: DateTime
+      + registrar_evidencia(enlace: String, archivo: File, fecha: Date, comentario: String, autor: MiembroProyecto): Evidencia
+      + marcar_completado(): void
+      + esta_completado(): boolean
+    }
+
+    class Evidencia {
+      - id: int
+      - enlace: String
+      - archivo: String
+      - fecha: Date
+      - fecha_registro: DateTime
+      + tiene_enlace_o_archivo(): boolean
+      + descripcion(): String
+      + abrir_archivo(): File
+      + clean(): void
+    }
+  }
+}
+
+package "reportes" #FAEEDA {
+  package "model" {
+    class Proyecto {
+      - id: int
+      - nombre: String
+      - fecha_inicio: Date
+      - fecha_fin: Date
+      + periodo(): String
+    }
+
+    class MiembroProyecto {
+      - id: int
+      - rol: String
+      - activo: boolean
+      + clean(): void
+    }
+  }
+}
+
+TecnicaQA "1" -- "1..*" Paso : define
+TecnicaQA "1" -- "0..*" SeguimientoTecnica : aplica
+SeguimientoTecnica "1" -- "1..*" SeguimientoPaso : desglosa
+SeguimientoPaso "*" -- "1" Paso : ejecuta
+SeguimientoPaso "1" -- "0..1" Evidencia : se respalda con
+SeguimientoTecnica "*" -- "1" Proyecto : sigue
+Evidencia "*" -- "1" MiembroProyecto : autor
+
+RegistroEvidenciaTemplate ..> RegistrarEvidenciaView : dispara solicitud >
+RegistrarEvidenciaView ..> EvidenciaForm : valida >
+RegistrarEvidenciaView ..> SeguimientoPaso : registra >
+AbrirEvidenciaView ..> Evidencia : abre >
+
+note right of Evidencia
+  UNIQUE(seguimiento_paso_id): máximo una evidencia por paso.
+  CHECK(enlace IS NOT NULL OR archivo IS NOT NULL).
+  El miembro_proyecto (autor) debe pertenecer al proyecto
+  de seguimiento_paso; se valida en clean().
+  fecha es la fecha declarada por el usuario (HU-10);
+  fecha_registro la sella el alta automáticamente.
+end note
+
+note bottom of SeguimientoPaso
+  Un paso no se marca completado sin evidencia.
+  marcar_completado() valida que exista una Evidencia
+  asociada y registra la fecha_completado.
+end note
+
+note right of RegistrarEvidenciaView
+  La vista valida el formulario y que el paso pertenezca
+  al seguimiento consultado (404 si no); delega el alta
+  en SeguimientoPaso.registrar_evidencia.
+end note
+@enduml
