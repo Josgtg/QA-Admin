@@ -2,6 +2,7 @@ from django.urls import path
 
 from apps.modelos.views import (
     AplicarModeloView,
+    DescargarEvidenciaMetricaView,
     RegistrarRevisionMetricaView,
 )
 
@@ -49,5 +50,10 @@ urlpatterns = [
         '<int:proyecto_id>/metricas/<int:metrica_id>/revisar/',
         RegistrarRevisionMetricaView.as_view(),
         name='registrar_revision',
+    ),
+    path(
+        '<int:proyecto_id>/revisiones/<int:revision_id>/evidencia/',
+        DescargarEvidenciaMetricaView.as_view(),
+        name='descargar_evidencia_metrica',
     ),
 ]

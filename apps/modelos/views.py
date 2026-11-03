@@ -1,6 +1,14 @@
+from pathlib import Path
+
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBadRequest,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
@@ -16,6 +24,7 @@ from .models import (
     Metrica,
     MetricaAplicada,
     ModeloCalidad,
+    RevisionMetrica,
 )
 
 
@@ -151,6 +160,33 @@ class AplicarModeloView(View):
                 'error': error,
                 'tiene_mediciones': proyecto.tiene_mediciones(),
             },
+        )
+
+
+class DescargarEvidenciaMetricaView(View):
+    """Descarga el archivo de una revisión del proyecto, incluso histórica."""
+
+    def get(
+        self, request: HttpRequest, proyecto_id: int, revision_id: int
+    ) -> HttpResponse:
+        """Resuelve la revisión y entrega el archivo desde su almacenamiento."""
+        revision = get_object_or_404(
+            RevisionMetrica,
+            pk=revision_id,
+            metrica_aplicada__modelo_aplicado__proyecto_id=proyecto_id,
+        )
+        if not revision.archivo:
+            raise Http404('Esta revisión no tiene un archivo de evidencia.')
+        try:
+            archivo = revision.archivo.open('rb')
+        except FileNotFoundError as error:
+            raise Http404(
+                'El archivo de evidencia ya no está disponible.'
+            ) from error
+        return FileResponse(
+            archivo,
+            as_attachment=True,
+            filename=Path(revision.archivo.name).name,
         )
 
 

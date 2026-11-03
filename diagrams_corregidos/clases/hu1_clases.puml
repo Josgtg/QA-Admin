@@ -15,7 +15,8 @@ actor "Encargado de QA" as Encargado
 package "modelos.template" #EEEDFE {
   class RevisionMetricaTemplate {
     + abrir(proyecto_id: int, metrica_id: int): void
-    + enviar(): void
+    + enviar(valor: Float, fecha: Date, enlace: String, archivo: File, miembro_proyecto_id: int): void
+    + descargar_archivo(proyecto_id: int, revision_id: int): void
     + cancelar(): void
   }
 }
@@ -24,8 +25,20 @@ package "modelos.view" #EEEDFE {
   class RegistrarRevisionMetricaView {
     + get(request: HttpRequest, proyecto_id: int, metrica_id: int): HttpResponse
     + post(request: HttpRequest, proyecto_id: int, metrica_id: int): HttpResponse
-    + obtener_metrica_aplicada(proyecto: Proyecto, metrica: Metrica): MetricaAplicada
+    + obtener_metrica_aplicada(proyecto: Proyecto, metrica: Metrica | int): MetricaAplicada [0..1]
     + obtener_historial(proyecto: Proyecto, metrica: Metrica): List<RevisionMetrica>
+  }
+
+  class DescargarEvidenciaMetricaView {
+    + get(request: HttpRequest, proyecto_id: int, revision_id: int): HttpResponse
+  }
+}
+
+package "modelos.forms" #EEEDFE {
+  class RevisionMetricaForm {
+    + is_valid(): boolean
+    + clean(): Dict
+    + save(commit: boolean = true): RevisionMetrica
   }
 }
 
@@ -84,8 +97,8 @@ package "modelos.model" #EEEDFE {
     - nombre: String
     - descripcion: String
     - unidad: String
-    - valor_min: Float
-    - valor_max: Float
+    - valor_min: Float [0..1]
+    - valor_max: Float [0..1]
     + validar_rango(valor: Float): boolean
     + revisiones(proyecto: Proyecto): List<RevisionMetrica>
     + ultima_revision(proyecto: Proyecto): RevisionMetrica
@@ -133,9 +146,11 @@ package "modelos.model" #EEEDFE {
     - enlace: String
     - archivo: String
     - cumple: boolean
+    + full_clean(): void
     + clean(): void
     + tiene_evidencia(): boolean
     + calcular_cumple(): boolean
+    + save(): void
   }
 }
 
@@ -158,6 +173,10 @@ MetricaAplicada --> TipoUmbral
 
 Encargado ..> RevisionMetricaTemplate : interactúa
 RevisionMetricaTemplate ..> RegistrarRevisionMetricaView : solicitud
+RevisionMetricaTemplate ..> DescargarEvidenciaMetricaView : descarga
+RegistrarRevisionMetricaView ..> RevisionMetricaForm : valida formulario
+RevisionMetricaForm ..> RevisionMetrica : construye
+DescargarEvidenciaMetricaView ..> RevisionMetrica : consulta por proyecto
 RegistrarRevisionMetricaView ..> Proyecto : consulta
 RegistrarRevisionMetricaView ..> MetricaAplicada : obtiene configuración vigente
 RegistrarRevisionMetricaView ..> RevisionMetrica : registra
@@ -171,6 +190,20 @@ note bottom of RevisionMetrica
   calcular_cumple() usa el umbral y tipo_umbral
   de la MetricaAplicada; cumple se guarda como
   resultado histórico de esa medición.
+end note
+
+note bottom of DescargarEvidenciaMetricaView
+  Consulta por proyecto y revisión en todo el historial.
+  Entrega FileResponse como archivo adjunto, incluso
+  después de cambiar de modelo. Si no existe la revisión
+  o el archivo, responde HTTP 404.
+end note
+
+note bottom of RevisionMetricaForm
+  ModelForm de Django. is_valid() valida campos,
+  fecha, autor del equipo activo y evidencia.
+  save(commit=false) construye la revisión sin guardar.
+  full_clean() es heredado de Model en RevisionMetrica.
 end note
 
 note bottom of MetricaAplicada
