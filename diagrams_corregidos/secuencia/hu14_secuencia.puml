@@ -1,0 +1,81 @@
+@startuml hu14_secuencia
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer"
+participant "TableroProyectoTemplate" as UI
+end box
+
+box "View Layer (reportes.view)"
+participant "TableroProyectoView" as View
+participant "f: RangoFechasForm" as Form
+end box
+
+box "Model Layer (reportes.model)"
+participant "funciones de models.py" as Funciones
+participant "p: Proyecto" as Proyecto
+participant "r: RegistroSalud" as Registro
+end box
+
+== Tendencia del índice de salud (HU-14) ==
+
+Encargado -> UI: Abre el tablero y elige un rango (opcional)
+UI -> View: get(request, proyecto_id)
+activate View
+
+View -> Funciones: registrar_salud(p)
+activate Funciones
+Funciones -> Proyecto: indice_salud()
+activate Proyecto
+Proyecto --> Funciones: Float
+deactivate Proyecto
+Funciones -> Registro: guardar_detalles(p)
+Funciones --> View: RegistroSalud
+deactivate Funciones
+
+View -> View: obtener_tendencia(p, f)
+activate View
+View -> Form: clean()
+activate Form
+
+alt "rango válido"
+    Form --> View: desde, hasta
+    View -> Funciones: tendencia_salud(p, None, desde, hasta)
+else "sin rango o rango inválido"
+    Form --> View: errores o datos vacíos
+    View -> Funciones: tendencia_salud(p, 30, None, None)
+end
+deactivate Form
+activate Funciones
+Funciones --> View: List<RegistroSalud>
+deactivate Funciones
+deactivate View
+
+View -> Funciones: caidas_salud(registros)
+activate Funciones
+loop "por cada caída entre dos registros"
+    Funciones -> Registro: causas_de_caida(anterior)
+    activate Registro
+    Registro --> Funciones: List de causas
+    deactivate Registro
+end
+Funciones --> View: List de caídas
+deactivate Funciones
+
+View -> View: puntos_tendencia(registros, caidas)
+activate View
+View -> View: marcar_etiquetas(puntos)
+deactivate View
+
+View --> UI: HttpResponse (200 OK)
+deactivate View
+
+alt "dos o más mediciones"
+    UI --> Encargado: Muestra la gráfica y las caídas con sus causas
+else "menos de dos mediciones"
+    UI --> Encargado: Avisa que aún no hay datos suficientes
+end
+
+@enduml

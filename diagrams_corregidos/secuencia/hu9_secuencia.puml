@@ -1,0 +1,103 @@
+@startuml hu9_secuencia
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer (reportes.template)"
+  participant "CatalogoMetricasTemplate" as UI
+end box
+
+box "View Layer (reportes.view)"
+  participant "CatalogoMetricasView" as View
+end box
+
+box "Model Layer (modelos.model)"
+  participant "Caracteristica" as Caracteristica
+  participant "Metrica" as Metrica
+  participant "mm: ModeloMetrica" as ModeloMetrica
+end box
+
+== Consulta del catálogo base de métricas (HU-09) ==
+
+Encargado -> UI: Abre el catálogo base de métricas
+UI -> View: get(request: HttpRequest)
+activate View
+
+View -> View: listar_metricas()
+activate View
+View -> Metrica: objects.select_related("caracteristica")
+activate Metrica
+Metrica --> View: List<Metrica> del catálogo base
+deactivate Metrica
+deactivate View
+
+View -> View: caracteristicas_disponibles()
+activate View
+View -> Caracteristica: objects.all()
+activate Caracteristica
+Caracteristica --> View: List<Caracteristica>
+deactivate Caracteristica
+deactivate View
+
+loop "por cada Metrica listada"
+    View -> Metrica: rango_esperado()
+    activate Metrica
+    Metrica --> View: "valor_min – valor_max unidad"
+    deactivate Metrica
+
+    View -> ModeloMetrica: objects.filter(metrica=m).first()
+    activate ModeloMetrica
+    ModeloMetrica --> View: mm o None (umbral informativo)
+    deactivate ModeloMetrica
+end
+
+View --> UI: HttpResponse (200, métricas agrupadas + característica)
+deactivate View
+
+UI --> Encargado: Tarjetas por característica con nombre, descripción, forma de medirla, unidad y rango (solo lectura)
+
+Encargado -> UI: Filtra por una característica
+UI -> View: filtrar_por_caracteristica(caracteristica_id)
+activate View
+
+View -> Caracteristica: objects.get(pk=caracteristica_id)
+activate Caracteristica
+Caracteristica --> View: caracteristica
+deactivate Caracteristica
+
+View -> Caracteristica: obtener_metricas()
+activate Caracteristica
+Caracteristica --> View: List<Metrica> de la característica
+deactivate Caracteristica
+
+View --> UI: HttpResponse (200, subconjunto de métricas)
+deactivate View
+
+UI --> Encargado: Muestra las métricas de la característica seleccionada o un estado vacío
+
+== Consulta de conformidad (solo lectura, umbral informativo) ==
+
+Encargado -> UI: Consulta conformidad para un valor medido
+UI -> View: filtrar_por_conformidad(cumple)
+activate View
+
+loop "por cada ModeloMetrica del catálogo"
+    View -> ModeloMetrica: evaluar_cumplimiento(valor)
+    activate ModeloMetrica
+    ModeloMetrica --> View: boolean (MINIMO: valor >= umbral; MAXIMO: valor <= umbral)
+    deactivate ModeloMetrica
+end
+
+View --> UI: HttpResponse (200, métricas que cumplen o no cumplen)
+deactivate View
+
+UI --> Encargado: Subconjunto filtrado (el catálogo no se modifica)
+
+note over Encargado, ModeloMetrica
+  HU-09 es de solo lectura: ninguna operación de este
+  flujo escribe en la base de datos.
+  Crear un modelo propio a partir del catálogo es HU-16.
+end note
+
+@enduml

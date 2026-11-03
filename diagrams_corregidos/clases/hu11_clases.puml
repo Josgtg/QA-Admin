@@ -1,0 +1,165 @@
+@startuml hu11_clases
+allowmixing
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam nodesep 70
+skinparam ranksep 95
+top to bottom direction
+
+title Clases: pasos completados y faltantes de una TQA (HU-11)
+
+actor "Encargado de QA" as Encargado
+
+package "tecnicas.template" #E1F5EE {
+  class EstadoTecnicaTemplate
+}
+
+package "tecnicas.view" #E1F5EE {
+  class EstadoTecnicaView {
+    + get(request: HttpRequest, proyecto_id: int, tecnica_id: int): HttpResponse
+    + obtener_estado_tecnica(proyecto: Proyecto, tecnica: TecnicaQA): EstadoTecnica
+    + calcular_porcentaje_avance(seguimiento: SeguimientoTecnica): Float
+  }
+}
+
+package "tecnicas.model" #E1F5EE {
+  class EstadoTecnica <<DTO>> {
+    - tecnica: TecnicaQA
+    - pasos: List<SeguimientoPaso>
+    - porcentaje_avance: Float
+    - completa: boolean
+    + esta_completa(): boolean
+    + pasos_completados(): List<SeguimientoPaso>
+    + pasos_pendientes(): List<SeguimientoPaso>
+  }
+
+  class TecnicaQA {
+    - id: int
+    - nombre: String
+    - dimension: Dimension
+    - tipo_control: TipoControl
+    + obtener_pasos(): List<Paso>
+  }
+
+  class Paso {
+    - id: int
+    - orden: int
+    - instruccion: String
+    - evidencia_esperada: String
+  }
+
+  class SeguimientoTecnica {
+    - id: int
+    - porcentaje_avance: Float
+    - activa: boolean
+    + calcular_avance(): Float
+    + esta_completada(): boolean
+    + pasos_completados(): List<SeguimientoPaso>
+    + pasos_pendientes(): List<SeguimientoPaso>
+    + tiene_evidencias_registradas(): boolean
+  }
+
+  class SeguimientoPaso {
+    - id: int
+    - completado: boolean
+    - comentario: String
+    - fecha_completado: Date
+    + esta_completado(): boolean
+    + tiene_evidencia(): boolean
+  }
+
+  class Evidencia {
+    - id: int
+    - enlace: String
+    - archivo: String
+    - fecha_registro: Date
+    + tiene_enlace_o_archivo(): boolean
+  }
+}
+
+package "reportes.model" #FAEEDA {
+  class Proyecto {
+    - id: int
+    - nombre: String
+    - fecha_inicio: Date
+    - fecha_fin: Date
+    + periodo(): String
+  }
+
+  class MiembroProyecto {
+    - id: int
+    - rol: String
+    - activo: boolean
+    + clean(): void
+  }
+}
+
+TecnicaQA "1" *-- "1..*" Paso : define
+SeguimientoTecnica "1" *-- "1..*" SeguimientoPaso : desglosa
+SeguimientoPaso "*" --> "1" Paso : ejecuta
+SeguimientoPaso "1" --> "0..1" Evidencia : se respalda con
+Evidencia "*" --> "1" MiembroProyecto : autor
+SeguimientoTecnica "*" --> "1" Proyecto : sigue
+SeguimientoTecnica "*" --> "1" TecnicaQA : aplica
+
+EstadoTecnica "*" --> "1" TecnicaQA : describe
+EstadoTecnica "1" *-- "0..*" SeguimientoPaso : lista
+
+Encargado ..> EstadoTecnicaTemplate : interactúa
+EstadoTecnicaTemplate ..> EstadoTecnicaView : dispara solicitud
+EstadoTecnicaView ..> SeguimientoTecnica : consulta avance
+EstadoTecnicaView ..> SeguimientoPaso : lista pasos y estado
+EstadoTecnicaView ..> Evidencia : enlaza evidencia de cada paso completado
+EstadoTecnicaView ..> EstadoTecnica : construye
+EstadoTecnicaView ..> EstadoTecnicaTemplate : renderiza
+
+note top of EstadoTecnicaView
+  CA1 · Cada técnica muestra sus pasos marcados
+  como completados o pendientes.
+  CA2 · Se muestra el porcentaje_avance (pasos
+  completados / pasos totales) * 100.
+  CA3 · Cada paso completado da acceso a su
+  Evidencia (enlace o archivo).
+  CA4 · Con todos los pasos completados la
+  técnica aparece como cumplida.
+end note
+
+note right of EstadoTecnica
+  DTO de solo lectura: agrupa el resultado de la
+  consulta para la plantilla. No se persiste:
+  la vista lo construye a partir de un
+  SeguimientoTecnica de HU-05.
+    porcentaje_avance = 0 si no hay pasos;
+    completa = (porcentaje_avance == 100).
+end note
+
+note bottom of EstadoTecnicaTemplate
+  Renderiza cada paso con icono de estado
+  (completado/pendiente), comentario y fecha,
+  y enlace a la evidencia si existe. Si la
+  técnica está completa muestra la marca
+  "cumplida"; si no, los pasos pendientes.
+end note
+
+note bottom of SeguimientoTecnica
+  Reutiliza HU-05. calcular_avance() cuenta los
+  SeguimientoPaso completados entre los totales;
+  esta_completada() es porcentaje_avance == 100.
+  HU-11 solo consulta; no crea ni modifica pasos.
+end note
+
+note bottom of SeguimientoPaso
+  Un paso completado debe tener Evidencia asociada
+  (regla HU-10 reutilizada en HU-11). esta_completado()
+  y tiene_evidencia() son derivadas; no se guardan.
+end note
+
+note bottom of Evidencia
+  SeguimientoPaso 1 : 0..1 Evidencia (FK única en
+  seguimiento_paso_id). Debe tener enlace o archivo.
+  Autor = MiembroProyecto del mismo proyecto,
+  validado en clean().
+end note
+@enduml

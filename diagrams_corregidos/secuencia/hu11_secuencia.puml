@@ -1,0 +1,123 @@
+@startuml hu11_secuencia
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer (tecnicas.template)"
+  participant "EstadoTecnicaTemplate" as UI
+end box
+
+box "View Layer (tecnicas.view)"
+  participant "EstadoTecnicaView" as View
+end box
+
+box "DTO Layer (tecnicas.model)"
+  participant "et: EstadoTecnica" as DTO
+end box
+
+box "Model Layer (reportes.model)"
+  participant "p: Proyecto" as Proyecto
+end box
+
+box "Model Layer (tecnicas.model)"
+  participant "tqa: TecnicaQA" as Tecnica
+  participant "st: SeguimientoTecnica" as SegTecnica
+  participant "sp: SeguimientoPaso" as SegPaso
+  participant "e: Evidencia" as Evidencia
+end box
+
+== Consulta de pasos completados y pendientes de una TQA (HU-11) ==
+
+Encargado -> UI: Abre el detalle de una técnica desde el seguimiento del proyecto
+UI -> View: get(request, proyecto_id, tecnica_id)
+activate View
+
+View -> Proyecto: objects.get(pk=proyecto_id)
+activate Proyecto
+Proyecto --> View: p = proyecto activo
+deactivate Proyecto
+
+View -> Tecnica: objects.get(pk=tecnica_id)
+activate Tecnica
+Tecnica --> View: tqa
+deactivate Tecnica
+
+View -> View: obtener_estado_tecnica(p, tqa)
+activate View
+
+View -> SegTecnica: objects.filter(proyecto=p, tecnica=tqa).first()
+activate SegTecnica
+SegTecnica --> View: st (o None si la técnica no se sigue en el proyecto)
+deactivate SegTecnica
+
+alt st is None
+    View --> UI: HttpResponse (404, la técnica no está en el seguimiento del proyecto)
+else st existe
+    View -> SegTecnica: prefetch_related("seguimiento_pasos")
+    activate SegTecnica
+    SegTecnica --> View: list<SeguimientoPaso> ordenados por paso__orden
+    deactivate SegTecnica
+
+    loop "por cada sp de st"
+        View -> SegPaso: esta_completado()
+        activate SegPaso
+        SegPaso --> View: completado: boolean
+        deactivate SegPaso
+
+        opt completado = true
+            View -> SegPaso: tiene_evidencia()
+            activate SegPaso
+            SegPaso --> View: boolean
+            deactivate SegPaso
+
+            opt tiene_evidencia() = true
+                View -> Evidencia: objects.get(seguimiento_paso=sp)
+                activate Evidencia
+                Evidencia --> View: e (enlace o archivo)
+                deactivate Evidencia
+            end
+        end
+    end
+
+    View -> SegTecnica: calcular_avance()
+    activate SegTecnica
+    SegTecnica --> View: (pasos completados / pasos totales) * 100
+    deactivate SegTecnica
+
+    View -> SegTecnica: esta_completada()
+    activate SegTecnica
+    SegTecnica --> View: boolean (porcentaje_avance == 100)
+    deactivate SegTecnica
+
+    create participant "et" as DTONew
+    View -> DTONew: EstadoTecnica(tecnica=tqa, pasos, porcentaje_avance, completa)
+    activate DTONew
+    DTONew --> View: et
+    deactivate DTONew
+
+    View --> UI: HttpResponse (200, et)
+    deactivate View
+
+    deactivate View
+
+    UI --> Encargado: Pasos con icono completado/pendiente, porcentaje de avance y enlace a la evidencia de cada paso completado
+
+    opt et.esta_completa() = false
+        UI --> Encargado: Lista de pasos pendientes por completar
+    end
+
+    opt et.esta_completa() = true
+        UI --> Encargado: La técnica aparece como cumplida
+    end
+end
+
+note over Encargado, Evidencia
+  HU-11 es de solo lectura: no marca pasos ni registra evidencias.
+  Registrar la evidencia de un paso es HU-10; el paso no se marca
+  completado sin Evidencia asociada.
+  Si el proyecto no tiene SeguimientoTecnica para la técnica, la
+  vista informa que aún no se sigue ese paso del proyecto.
+end note
+
+@enduml

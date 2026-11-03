@@ -1,0 +1,80 @@
+@startuml hu14_clases
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype polyline
+
+title Clases: tendencia del índice de salud (HU-14)
+
+package "reportes.template" {
+  class TableroProyectoTemplate
+}
+
+package "reportes.view" {
+  class TableroProyectoView {
+    + get(request: HttpRequest, proyecto_id: int): HttpResponse
+    + obtener_tendencia(proyecto: Proyecto, rango_form: RangoFechasForm): List<RegistroSalud>
+    + puntos_tendencia(registros: List<RegistroSalud>, caidas: List): List
+    + marcar_etiquetas(puntos: List): void
+  }
+
+  class RangoFechasForm {
+    - desde: Date
+    - hasta: Date
+    + clean(): dict
+  }
+}
+
+package "reportes.model" {
+  enum TipoDetalleSalud {
+    TECNICA
+    METRICA
+  }
+
+  class Proyecto {
+    - id: int
+    - nombre: String
+    + indice_salud(): Float
+    + avance_tecnicas(): Float
+    + cumplimiento_metricas(): Float
+    + estado_metricas(): List
+  }
+
+  class RegistroSalud {
+    - id: int
+    - fecha: Date
+    - indice: Float
+    - actualizado: DateTime
+    + guardar_detalles(proyecto: Proyecto): void
+    + causas_de_caida(anterior: RegistroSalud): List
+  }
+
+  class DetalleSalud {
+    - id: int
+    - tipo: TipoDetalleSalud
+    - nombre: String
+    - valor: Float
+    + describir_cambio(antes: Float, despues: Float): dict
+  }
+
+  class "funciones de models.py" as Funciones <<utility>> {
+    + registrar_salud(proyecto: Proyecto): RegistroSalud
+    + tendencia_salud(proyecto: Proyecto, limite: int, desde: Date, hasta: Date): List<RegistroSalud>
+    + caidas_salud(registros: List<RegistroSalud>): List
+  }
+
+  note right of Proyecto
+    indice_salud() promedia técnicas y
+    métricas. Una métrica sin medición
+    cuenta como no cumplida (HU-08).
+  end note
+}
+
+Proyecto "1" *-- "0..*" RegistroSalud
+RegistroSalud "1" *-- "0..*" DetalleSalud
+DetalleSalud "*" --> "1" TipoDetalleSalud
+
+TableroProyectoTemplate ..> TableroProyectoView : dispara solicitud >
+TableroProyectoView ..> RangoFechasForm : valida >
+TableroProyectoView ..> Funciones : consulta >
+Funciones ..> RegistroSalud : opera sobre >
+@enduml

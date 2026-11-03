@@ -128,6 +128,11 @@ note right of SeguimientoTecnica
   desactiva (activa = False) y conserva sus
   evidencias. Las evidencias se alcanzan a través
   de sus SeguimientoPaso.
+  HU-11 reutiliza esta clase sin cambios
+  estructurales: el estado de pasos se consulta con
+  SeguimientoPaso.esta_completado() y se empaqueta en
+  el DTO de solo lectura EstadoTecnica
+  (ver hu11_clases.puml). HU-11 no escribe.
 end note
 
 note bottom of SeguimientoPaso

@@ -4,6 +4,38 @@ from django.core.exceptions import ValidationError
 from .models import Proyecto
 
 
+class RangoFechasForm(forms.Form):
+    """Rango opcional de fechas para la gráfica de salud (HU-14)."""
+
+    desde = forms.DateField(
+        required=False,
+        error_messages={'invalid': 'La fecha inicial no es válida.'},
+        widget=forms.DateInput(
+            attrs={'type': 'date', 'class': 'select-input'},
+            format='%Y-%m-%d',
+        ),
+    )
+    hasta = forms.DateField(
+        required=False,
+        error_messages={'invalid': 'La fecha final no es válida.'},
+        widget=forms.DateInput(
+            attrs={'type': 'date', 'class': 'select-input'},
+            format='%Y-%m-%d',
+        ),
+    )
+
+    def clean(self):
+        datos = super().clean()
+        desde = datos.get('desde')
+        hasta = datos.get('hasta')
+        if desde and hasta and hasta < desde:
+            self.add_error(
+                'hasta',
+                'La fecha final no puede ser anterior a la inicial.',
+            )
+        return datos
+
+
 class ProyectoForm(forms.ModelForm):
     class Meta:
         model = Proyecto
