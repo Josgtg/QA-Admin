@@ -116,9 +116,12 @@ class CatalogoTecnicasView(View):
 
 
 class DetalleTecnicaView(View):
+    """Consulta la pregunta clave, instrucciones y evidencias de una TQA."""
+
     template_name = 'tecnicas/detalle_tecnica.html'
 
     def get(self, request: HttpRequest, tecnica_id: int) -> HttpResponse:
+        """Presenta los pasos de la técnica y su seguimiento si está seleccionada."""
         tecnica = self.obtener_tecnica(tecnica_id)
         proyecto = obtener_proyecto_seleccionado(request)
         seguimiento = None
@@ -140,9 +143,11 @@ class DetalleTecnicaView(View):
         )
 
     def obtener_tecnica(self, tecnica_id):
+        """Obtiene la técnica solicitada o devuelve HTTP 404."""
         return get_object_or_404(TecnicaQA, pk=tecnica_id)
 
     def obtener_pasos(self, tecnica):
+        """Consulta los pasos en el orden definido por la técnica."""
         return tecnica.obtener_pasos()
 
 
