@@ -13,12 +13,13 @@ from apps.tecnicas.selection import (
     seleccionar_proyecto,
 )
 
-from .forms import MiembroProyectoFormSet, ProyectoForm
+from .forms import MiembroProyectoFormSet, ProyectoForm, RangoFechasForm
 from .models import (
     MiembroProyecto,
     Periodo,
     Persona,
     Proyecto,
+    caidas_salud,
     registrar_salud,
     tendencia_salud,
 )
@@ -407,16 +408,24 @@ class TableroProyectoView(View):
     ancho_grafica = 320
     alto_grafica = 150
     margen_grafica = 12
+    margen_eje_y = 28
+    separacion_etiquetas = 44
     radio_anillo = 68
+    registros_por_defecto = 30
 
     def get(self, request: HttpRequest, proyecto_id: int) -> HttpResponse:
         proyecto = get_object_or_404(Proyecto, pk=proyecto_id)
         seleccionar_proyecto(request, proyecto)
 
         registro_actual = registrar_salud(proyecto)
-        tendencia = tendencia_salud(proyecto)
+        rango_form = RangoFechasForm(request.GET or None)
+        tendencia = self.obtener_tendencia(proyecto, rango_form)
         salud = registro_actual.indice if registro_actual else None
-        ultima_actualizacion = tendencia[-1].actualizado if tendencia else None
+        ultimo_registro = proyecto.registros_salud.order_by('-fecha').first()
+        ultima_actualizacion = (
+            ultimo_registro.actualizado if ultimo_registro else None
+        )
+        caidas = caidas_salud(tendencia)
         aplicado = proyecto.modelo_aplicado_vigente()
 
         return render(
@@ -435,10 +444,29 @@ class TableroProyectoView(View):
                 'riesgo_salud': self.riesgo_salud(salud),
                 'desplazamiento_anillo': self.desplazamiento_anillo(salud),
                 'tendencia': tendencia,
-                'puntos_tendencia': self.puntos_tendencia(tendencia),
+                'puntos_tendencia': self.puntos_tendencia(tendencia, caidas),
+                'hay_historial': ultimo_registro is not None,
+                'historial_recortado': (
+                    len(tendencia) == self.registros_por_defecto
+                    and not rango_form.has_changed()
+                ),
+                'rango_form': rango_form,
+                'datos_insuficientes': len(tendencia) < 2,
+                'caidas': caidas,
                 'ultima_actualizacion': ultima_actualizacion,
             },
         )
+
+    def obtener_tendencia(self, proyecto, rango_form):
+        """Registros del rango pedido o, sin rango, los más recientes."""
+        if rango_form.is_bound and rango_form.is_valid():
+            desde = rango_form.cleaned_data['desde']
+            hasta = rango_form.cleaned_data['hasta']
+            if desde or hasta:
+                return tendencia_salud(
+                    proyecto, limite=None, desde=desde, hasta=hasta
+                )
+        return tendencia_salud(proyecto, limite=self.registros_por_defecto)
 
     def tono_salud(self, salud):
         if salud is None:
@@ -467,37 +495,59 @@ class TableroProyectoView(View):
         valor = 0 if salud is None else min(max(salud, 0), 100)
         return round(perimetro * (1 - valor / 100), 1)
 
-    def puntos_tendencia(self, registros):
-        total = len(registros)
-        if not total:
+    def puntos_tendencia(self, registros, caidas=()):
+        """Ubica cada registro en la gráfica según su fecha y su índice."""
+        if not registros:
             return []
 
-        util_ancho = self.ancho_grafica - 2 * self.margen_grafica
+        fechas_caida = {caida['fecha'] for caida in caidas}
+        primero = registros[0].fecha
+        dias = (registros[-1].fecha - primero).days
+        util_ancho = (
+            self.ancho_grafica - self.margen_eje_y - self.margen_grafica
+        )
         util_alto = self.alto_grafica - 2 * self.margen_grafica
-        paso = util_ancho / (total - 1) if total > 1 else 0
-        centro = self.ancho_grafica / 2
         puntos = []
-        for posicion, registro in enumerate(registros):
+        for registro in registros:
             valor = min(max(registro.indice, 0), 100)
-            x = (
-                self.margen_grafica + posicion * paso
-                if total > 1
-                else centro
-            )
-            y = (
-                self.alto_grafica
-                - self.margen_grafica
-                - (valor / 100) * util_alto
-            )
+            avance = (registro.fecha - primero).days / dias if dias else 0.5
             puntos.append(
                 {
-                    'x': round(x, 1),
-                    'y': round(y, 1),
+                    'x': round(self.margen_eje_y + avance * util_ancho, 1),
+                    'y': round(
+                        self.alto_grafica
+                        - self.margen_grafica
+                        - (valor / 100) * util_alto,
+                        1,
+                    ),
                     'fecha': registro.fecha,
                     'indice': registro.indice,
+                    'es_caida': registro.fecha in fechas_caida,
+                    'con_etiqueta': False,
                 }
             )
+        self.marcar_etiquetas(puntos)
         return puntos
+
+    def marcar_etiquetas(self, puntos):
+        """Marca las fechas visibles del eje sin que se encimen."""
+        visibles = []
+        for punto in puntos:
+            if (
+                not visibles
+                or punto['x'] - visibles[-1]['x'] >= self.separacion_etiquetas
+            ):
+                visibles.append(punto)
+        ultimo = puntos[-1]
+        if visibles[-1] is not ultimo:
+            if (
+                len(visibles) > 1
+                and ultimo['x'] - visibles[-1]['x'] < self.separacion_etiquetas
+            ):
+                visibles.pop()
+            visibles.append(ultimo)
+        for punto in visibles:
+            punto['con_etiqueta'] = True
 
     def volver_a_lista(self):
         return redirect('reportes:lista')

@@ -1985,3 +1985,64 @@ table.data {
         min-width: 0;
     }
 }
+
+.chart-point-caida {
+    fill: #dc2626;
+}
+
+.chart-tick {
+    fill: var(--soft);
+    font-size: 9px;
+}
+
+.chart-tick-y {
+    text-anchor: end;
+}
+
+.rango-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 12px;
+}
+
+.rango-form .select-input {
+    width: 122px;
+    min-width: 0;
+    padding: 5px 6px;
+    font-size: 11px;
+}
+
+.rango-error {
+    margin: 0 0 10px;
+    color: #dc2626;
+    font-size: 12px;
+}
+
+.rango-aviso {
+    margin: 10px 0 0;
+    color: #b45309;
+    font-size: 12px;
+}
+
+.caidas {
+    margin-top: 14px;
+    font-size: 12px;
+}
+
+.caidas h4 {
+    margin: 0 0 6px;
+    font-size: 13px;
+}
+
+.caida summary {
+    cursor: pointer;
+    padding: 4px 0;
+}
+
+.caida ul {
+    margin: 2px 0 6px;
+    padding-left: 18px;
+}

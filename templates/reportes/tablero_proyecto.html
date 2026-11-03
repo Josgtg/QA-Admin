@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}{{ proyecto.nombre }} · Tablero · QA Admin{% endblock %}
 
@@ -93,39 +94,83 @@
 
         <section class="card chart-card">
             <div class="card-head">
-                <h3>Tendencia de Salud (Últimos 6 registros)</h3>
+                <h3>Tendencia de Salud</h3>
                 {% if tendencia %}
                 <span class="head-muted">{{ tendencia|length }} registro{{ tendencia|length|pluralize:"s" }}</span>
                 {% endif %}
             </div>
 
+            <form method="get" class="rango-form">
+                <label for="{{ rango_form.desde.id_for_label }}">Desde</label>
+                {{ rango_form.desde }}
+                <label for="{{ rango_form.hasta.id_for_label }}">Hasta</label>
+                {{ rango_form.hasta }}
+                <button class="btn btn-outline btn-sm" type="submit">Aplicar</button>
+                <a class="link" href="{% url 'reportes:tablero' proyecto.pk %}">Quitar</a>
+            </form>
+            {% for campo in rango_form %}
+            {% for error in campo.errors %}
+            <p class="rango-error">{{ error }}</p>
+            {% endfor %}
+            {% endfor %}
+
             {% if puntos_tendencia %}
-            <svg class="chart" viewBox="0 0 320 150" role="img"
+            <svg class="chart" viewBox="0 0 320 165" role="img"
                  aria-label="Tendencia del índice de salud del proyecto">
-                <line class="chart-grid" x1="12" y1="12" x2="308" y2="12"></line>
-                <line class="chart-grid" x1="12" y1="44" x2="308" y2="44"></line>
-                <line class="chart-grid" x1="12" y1="76" x2="308" y2="76"></line>
-                <line class="chart-grid" x1="12" y1="108" x2="308" y2="108"></line>
-                <polyline class="chart-axis" points="12,12 12,138 308,138"></polyline>
+                <line class="chart-grid" x1="28" y1="12" x2="308" y2="12"></line>
+                <line class="chart-grid" x1="28" y1="43.5" x2="308" y2="43.5"></line>
+                <line class="chart-grid" x1="28" y1="75" x2="308" y2="75"></line>
+                <line class="chart-grid" x1="28" y1="106.5" x2="308" y2="106.5"></line>
+                <polyline class="chart-axis" points="28,12 28,138 308,138"></polyline>
+                <text class="chart-tick chart-tick-y" x="23" y="15">100</text>
+                <text class="chart-tick chart-tick-y" x="23" y="78">50</text>
+                <text class="chart-tick chart-tick-y" x="23" y="141">0</text>
                 <polyline class="line-blue"
-                          points="{% for punto in puntos_tendencia %}{{ punto.x }},{{ punto.y }} {% endfor %}"></polyline>
+                          points="{% for punto in puntos_tendencia %}{{ punto.x|unlocalize }},{{ punto.y|unlocalize }} {% endfor %}"></polyline>
                 {% for punto in puntos_tendencia %}
-                <circle class="chart-point" cx="{{ punto.x }}" cy="{{ punto.y }}" r="3">
-                    <title>{{ punto.fecha|date:"d/m/Y" }}: {{ punto.indice }}%</title>
+                <circle class="chart-point{% if punto.es_caida %} chart-point-caida{% endif %}" cx="{{ punto.x|unlocalize }}" cy="{{ punto.y|unlocalize }}" r="5">
+                    <title>{{ punto.fecha|date:"d/m/Y" }}: {{ punto.indice }}</title>
                 </circle>
+                {% if punto.con_etiqueta %}
+                <text class="chart-tick" x="{{ punto.x|unlocalize }}" y="154" text-anchor="middle">{{ punto.fecha|date:"d/m" }}</text>
+                {% endif %}
                 {% endfor %}
             </svg>
-            <div class="chart-labels">
-                {% for registro in tendencia %}
-                <span>{{ registro.fecha|date:"d/m" }}</span>
-                {% endfor %}
-            </div>
-            <p class="chart-note">El tablero guarda un registro de salud por día.</p>
+            {% if datos_insuficientes %}
+            <p class="rango-aviso">Aún no hay datos suficientes para ver la tendencia: se necesitan al menos dos mediciones.</p>
+            {% endif %}
+            <p class="chart-note">Pasa el cursor por un punto para ver su fecha y su valor. El tablero guarda un registro de salud por día.</p>
+            {% if historial_recortado %}
+            <p class="chart-note">Se muestran las 30 mediciones más recientes. Elige un rango para ver las anteriores.</p>
+            {% endif %}
             {% else %}
             <div class="placeholder-block placeholder-block-sm">
                 <svg class="icon"><use href="#i-metrics"></use></svg>
+                {% if hay_historial %}
+                <p>No hay mediciones en este rango</p>
+                <span>Elige otras fechas o quita el rango para ver todas.</span>
+                {% else %}
                 <p>Sin historial de salud todavía</p>
-                <span>La tendencia aparece cuando el proyecto tenga técnicas en seguimiento.</span>
+                <span>Aún no hay datos suficientes para ver la tendencia: se necesitan al menos dos mediciones.</span>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if caidas %}
+            <div class="caidas">
+                <h4>Caídas del índice</h4>
+                {% for caida in caidas %}
+                <details class="caida"{% if forloop.first %} open{% endif %}>
+                    <summary>{{ caida.fecha|date:"d/m/Y" }}: de {{ caida.antes }} a {{ caida.despues }}</summary>
+                    <ul>
+                        {% for causa in caida.causas %}
+                        <li>{{ causa.tipo }} «{{ causa.nombre }}»: {{ causa.texto }}</li>
+                        {% empty %}
+                        <li>No hay detalle guardado para explicar esta caída.</li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endfor %}
             </div>
             {% endif %}
         </section>
