@@ -85,6 +85,17 @@ class CatalogoMetricasViewTests(TestCase):
         self.assertContains(respuesta, 'Rango esperado')
         # Una métrica concreta del seed y su unidad.
         self.assertContains(respuesta, 'Disponibilidad')
+        self.assertContains(respuesta, '0 – 100 %')
+
+    def test_catalogo_muestra_metricas_sin_limites(self):
+        """El catálogo conserva el estado vacío para rangos aún no definidos."""
+        Metrica.objects.create(
+            caracteristica=Caracteristica.objects.get(nombre='Fiabilidad'),
+            nombre='Métrica sin límites',
+            unidad='%',
+        )
+        respuesta = self.client.get(self.url)
+        self.assertContains(respuesta, 'Métrica sin límites')
         self.assertContains(respuesta, 'Sin límites definidos')
 
     def test_catalogo_agrupa_por_caracteristica(self):

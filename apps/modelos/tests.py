@@ -260,11 +260,10 @@ class RangosBaseMigrationTests(TransactionTestCase):
     def test_migracion_conserva_limites_propios_y_revisiones(self):
         """Completa rangos vacíos sin alterar límites parciales ni historial."""
         executor = MigrationExecutor(connection)
+        finales = executor.loader.graph.leaf_nodes()
         executor.migrate([('modelos', '0002_modelos_base')])
         self.addCleanup(
-            lambda: MigrationExecutor(connection).migrate(
-                [('modelos', '0003_rangos_metricas_base')]
-            )
+            lambda: MigrationExecutor(connection).migrate(finales)
         )
         estado = executor.loader.project_state(
             [('modelos', '0002_modelos_base')]
@@ -285,21 +284,39 @@ class RangosBaseMigrationTests(TransactionTestCase):
             nombre='Métrica propia',
             unidad='%',
         )
-        proyecto = crear_proyecto()
-        miembro = crear_miembro(proyecto)
-        aplicado = proyecto.aplicar_modelo(
-            ModeloCalidad.objects.get(nombre='McCall')
+        ProyectoAnterior = estado.get_model('reportes', 'Proyecto')
+        PersonaAnterior = estado.get_model('reportes', 'Persona')
+        MiembroAnterior = estado.get_model('reportes', 'MiembroProyecto')
+        ModeloAnterior = estado.get_model('modelos', 'ModeloCalidad')
+        AplicacionAnterior = estado.get_model('modelos', 'ModeloAplicado')
+        InstantaneaAnterior = estado.get_model('modelos', 'MetricaAplicada')
+        RevisionAnterior = estado.get_model('modelos', 'RevisionMetrica')
+        proyecto = ProyectoAnterior.objects.create(
+            nombre='Histórico',
+            fecha_inicio=timezone.localdate(),
+            fecha_fin=timezone.localdate(),
         )
-        revision = RevisionMetrica.objects.create(
-            metrica_aplicada=aplicado.metrica_aplicada(con_limites.pk),
+        miembro = MiembroAnterior.objects.create(
+            proyecto=proyecto,
+            persona=PersonaAnterior.objects.create(nombre='Ana'),
+            rol='QA',
+        )
+        aplicado = AplicacionAnterior.objects.create(
+            proyecto=proyecto,
+            modelo_calidad=ModeloAnterior.objects.get(nombre='McCall'),
+        )
+        instantanea = InstantaneaAnterior.objects.create(
+            modelo_aplicado=aplicado, metrica=con_limites, umbral=90
+        )
+        revision = RevisionAnterior.objects.create(
+            metrica_aplicada=instantanea,
             miembro_proyecto=miembro,
             valor=150,
+            cumple=True,
             enlace='https://ejemplo.test/historica',
         )
 
-        MigrationExecutor(connection).migrate(
-            [('modelos', '0003_rangos_metricas_base')]
-        )
+        MigrationExecutor(connection).migrate(finales)
 
         con_limites.refresh_from_db()
         parcial.refresh_from_db()
@@ -311,6 +328,7 @@ class RangosBaseMigrationTests(TransactionTestCase):
         porcentaje = MetricaAnterior.objects.get(nombre='Funciones documentadas')
         self.assertEqual((porcentaje.valor_min, porcentaje.valor_max), (0, 100))
         self.assertEqual(revision.valor, 150)
+        self.assertTrue(revision.cumple)
         self.assertEqual(revision.enlace, 'https://ejemplo.test/historica')
 
 

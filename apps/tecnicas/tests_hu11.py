@@ -407,7 +407,8 @@ class EstadoTecnicaEnlacesTests(TestCase):
 
         self.assertContains(
             respuesta,
-            reverse('tecnicas:estado', args=[self.tecnica.pk]),
+            reverse('tecnicas:estado', args=[self.tecnica.pk])
+            + f'?proyecto={self.proyecto.pk}',
         )
 
     def test_el_menu_resalta_tecnicas(self):
