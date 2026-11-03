@@ -15,6 +15,7 @@ from .models import (
     Persona,
     Proyecto,
     RegistroSalud,
+    caidas_salud,
     registrar_salud,
     tendencia_salud,
 )
@@ -1110,3 +1111,392 @@ class RegistrarRevisionMetricaViewTests(TestCase):
             respuesta,
             reverse('reportes:aplicar_modelo', args=[proyecto.pk]),
         )
+
+
+class IndiceSaludHU14Tests(TestCase):
+    def setUp(self):
+        self.proyecto = crear_proyecto('Alpha')
+        self.seguimiento = SeguimientoTecnica.objects.create(
+            proyecto=self.proyecto,
+            tecnica=crear_tecnica(),
+            porcentaje_avance=80.0,
+        )
+
+    def aplicar_modelo(self):
+        modelo = ModeloCalidad.obtener_predefinidos().first()
+        return self.proyecto.aplicar_modelo(modelo)
+
+    def test_sin_metricas_el_indice_son_las_tecnicas(self):
+        self.assertEqual(self.proyecto.indice_salud(), 80.0)
+
+    def test_metricas_sin_medicion_no_cuentan_como_cumplidas(self):
+        self.aplicar_modelo()
+        self.assertEqual(self.proyecto.cumplimiento_metricas(), 0.0)
+        self.assertEqual(self.proyecto.indice_salud(), 40.0)
+
+    def test_solo_metricas_sin_tecnicas(self):
+        self.seguimiento.desactivar()
+        self.aplicar_modelo()
+        self.assertEqual(self.proyecto.indice_salud(), 0.0)
+
+    def test_registro_guarda_detalle_de_tecnicas_y_metricas(self):
+        self.aplicar_modelo()
+        registro = registrar_salud(self.proyecto)
+        tipos = set(registro.detalles.values_list('tipo', flat=True))
+        self.assertEqual(tipos, {'TECNICA', 'METRICA'})
+
+    def test_registrar_dos_veces_no_duplica_detalles(self):
+        registrar_salud(self.proyecto)
+        registro = registrar_salud(self.proyecto)
+        self.assertEqual(registro.detalles.count(), 1)
+
+
+class TendenciaHU14Tests(TestCase):
+    def setUp(self):
+        self.proyecto = crear_proyecto('Alpha')
+        self.tecnica = crear_tecnica()
+        self.url = reverse('reportes:tablero', args=[self.proyecto.pk])
+        self.hoy = timezone.localdate()
+
+    def registro(self, dias, indice, avance=None):
+        registro = RegistroSalud.objects.create(
+            proyecto=self.proyecto,
+            fecha=self.hoy - timedelta(days=dias),
+            indice=indice,
+        )
+        registro.detalles.create(
+            tipo='TECNICA',
+            nombre=self.tecnica.nombre,
+            valor=indice if avance is None else avance,
+        )
+        return registro
+
+    def test_grafica_muestra_fecha_y_valor_al_pasar_el_cursor(self):
+        self.registro(2, 50.0)
+        self.registro(1, 70.0)
+        respuesta = self.client.get(self.url)
+        fecha = (self.hoy - timedelta(days=1)).strftime('%d/%m/%Y')
+        self.assertContains(respuesta, f'<title>{fecha}: 70.0</title>')
+
+    def test_grafica_muestra_mas_de_seis_registros(self):
+        for dias in range(1, 10):
+            self.registro(dias, 50.0)
+        respuesta = self.client.get(self.url)
+        self.assertEqual(len(respuesta.context['tendencia']), 9)
+
+    def test_rango_limita_los_registros(self):
+        self.registro(10, 40.0)
+        self.registro(5, 50.0)
+        self.registro(1, 60.0)
+        respuesta = self.client.get(
+            self.url,
+            {
+                'desde': (self.hoy - timedelta(days=6)).isoformat(),
+                'hasta': (self.hoy - timedelta(days=2)).isoformat(),
+            },
+        )
+        self.assertEqual(
+            [r.indice for r in respuesta.context['tendencia']], [50.0]
+        )
+
+    def test_rango_invertido_muestra_error_y_no_filtra(self):
+        self.registro(5, 50.0)
+        self.registro(1, 60.0)
+        respuesta = self.client.get(
+            self.url,
+            {
+                'desde': self.hoy.isoformat(),
+                'hasta': (self.hoy - timedelta(days=9)).isoformat(),
+            },
+        )
+        self.assertContains(respuesta, 'no puede ser anterior a la inicial')
+        self.assertEqual(len(respuesta.context['tendencia']), 2)
+
+    def test_fecha_invalida_muestra_error(self):
+        respuesta = self.client.get(self.url, {'desde': 'ayer'})
+        self.assertContains(respuesta, 'La fecha inicial no es válida.')
+
+    def test_una_medicion_avisa_datos_insuficientes(self):
+        self.registro(1, 60.0)
+        respuesta = self.client.get(self.url)
+        self.assertContains(respuesta, 'Aún no hay datos suficientes')
+
+    def test_sin_mediciones_avisa_datos_insuficientes(self):
+        respuesta = self.client.get(self.url)
+        self.assertContains(respuesta, 'Aún no hay datos suficientes')
+
+    def test_dos_mediciones_no_avisan(self):
+        self.registro(2, 60.0)
+        self.registro(1, 70.0)
+        respuesta = self.client.get(self.url)
+        self.assertNotContains(respuesta, 'Aún no hay datos suficientes')
+
+    def test_caida_muestra_la_tecnica_que_bajo(self):
+        self.registro(2, 80.0)
+        self.registro(1, 40.0)
+        respuesta = self.client.get(self.url)
+        self.assertContains(respuesta, 'Caídas del índice')
+        self.assertContains(respuesta, 'bajó de 80 % a 40 %')
+        self.assertContains(respuesta, self.tecnica.nombre)
+
+    def test_caida_por_metrica_nueva_que_no_cumple(self):
+        anterior = self.registro(2, 80.0)
+        actual = self.registro(1, 40.0, avance=80.0)
+        actual.detalles.create(tipo='METRICA', nombre='Cobertura', valor=0.0)
+        causas = actual.causas_de_caida(anterior)
+        self.assertEqual([c['nombre'] for c in causas], ['Cobertura'])
+
+    def test_caida_por_tecnica_quitada(self):
+        anterior = self.registro(2, 90.0)
+        actual = RegistroSalud.objects.create(
+            proyecto=self.proyecto, fecha=self.hoy, indice=30.0
+        )
+        causas = actual.causas_de_caida(anterior)
+        self.assertEqual(causas[0]['despues'], None)
+        self.assertEqual(causas[0]['antes'], 90.0)
+
+    def test_subida_no_es_caida(self):
+        registros = [self.registro(2, 40.0), self.registro(1, 80.0)]
+        self.assertEqual(caidas_salud(registros), [])
+
+    def test_caida_de_otro_proyecto_no_aparece(self):
+        otro = crear_proyecto('Beta')
+        self.registro(2, 80.0)
+        self.registro(1, 40.0)
+        respuesta = self.client.get(
+            reverse('reportes:tablero', args=[otro.pk])
+        )
+        self.assertNotContains(respuesta, 'Caídas del índice')
+
+    def test_eje_x_respeta_la_distancia_entre_fechas(self):
+        for dias in (30, 29, 1):
+            self.registro(dias, 50.0)
+        puntos = self.client.get(self.url).context['puntos_tendencia']
+        primera = puntos[1]['x'] - puntos[0]['x']
+        segunda = puntos[2]['x'] - puntos[1]['x']
+        self.assertAlmostEqual(segunda / primera, 28, delta=0.5)
+
+    def test_eje_x_siempre_muestra_primera_y_ultima_fecha(self):
+        for cantidad in range(2, 32):
+            RegistroSalud.objects.all().delete()
+            for dias in range(1, cantidad + 1):
+                self.registro(dias, 50.0)
+            puntos = self.client.get(self.url).context['puntos_tendencia']
+            self.assertTrue(puntos[0]['con_etiqueta'], cantidad)
+            self.assertTrue(puntos[-1]['con_etiqueta'], cantidad)
+            visibles = [p['x'] for p in puntos if p['con_etiqueta']]
+            for izquierda, derecha in zip(visibles, visibles[1:]):
+                self.assertGreaterEqual(derecha - izquierda, 44, cantidad)
+
+    def test_grafica_muestra_la_escala_de_0_a_100(self):
+        self.registro(2, 60.0)
+        self.registro(1, 70.0)
+        respuesta = self.client.get(self.url)
+        for valor in ('>100<', '>50<', '>0<'):
+            self.assertContains(respuesta, valor)
+
+    def test_el_valor_extremo_queda_dentro_de_la_grafica(self):
+        self.registro(2, 0.0)
+        self.registro(1, 100.0)
+        puntos = self.client.get(self.url).context['puntos_tendencia']
+        self.assertEqual([p['y'] for p in puntos], [138.0, 12.0])
+
+    def test_rango_vacio_no_dice_que_no_hay_historial(self):
+        self.registro(1, 60.0)
+        respuesta = self.client.get(
+            self.url, {'desde': '2000-01-01', 'hasta': '2000-01-02'}
+        )
+        self.assertContains(respuesta, 'No hay mediciones en este rango')
+        self.assertNotContains(respuesta, 'Sin historial de salud')
+
+    def test_rango_incluye_sus_dos_extremos(self):
+        self.registro(3, 40.0)
+        self.registro(2, 50.0)
+        self.registro(1, 60.0)
+        respuesta = self.client.get(
+            self.url,
+            {
+                'desde': (self.hoy - timedelta(days=3)).isoformat(),
+                'hasta': (self.hoy - timedelta(days=2)).isoformat(),
+            },
+        )
+        self.assertEqual(len(respuesta.context['tendencia']), 2)
+
+    def test_avisa_cuando_recorta_el_historial(self):
+        for dias in range(1, 41):
+            self.registro(dias, 50.0)
+        respuesta = self.client.get(self.url)
+        self.assertEqual(len(respuesta.context['tendencia']), 30)
+        self.assertContains(respuesta, 'Se muestran las 30 mediciones')
+
+    def test_rango_permite_ver_mediciones_viejas(self):
+        for dias in range(1, 41):
+            self.registro(dias, 50.0)
+        respuesta = self.client.get(
+            self.url, {'hasta': (self.hoy - timedelta(days=35)).isoformat()}
+        )
+        self.assertEqual(len(respuesta.context['tendencia']), 6)
+
+    def test_registro_anterior_sin_detalle_no_inventa_causas(self):
+        anterior = RegistroSalud.objects.create(
+            proyecto=self.proyecto,
+            fecha=self.hoy - timedelta(days=2),
+            indice=90.0,
+        )
+        actual = self.registro(1, 40.0)
+        self.assertEqual(actual.causas_de_caida(anterior), [])
+        respuesta = self.client.get(self.url)
+        self.assertContains(respuesta, 'No hay detalle guardado')
+
+    def test_metrica_que_deja_de_cumplir_se_explica_con_palabras(self):
+        anterior = self.registro(2, 80.0)
+        anterior.detalles.create(tipo='METRICA', nombre='Cobertura', valor=100.0)
+        actual = self.registro(1, 40.0, avance=80.0)
+        actual.detalles.create(tipo='METRICA', nombre='Cobertura', valor=0.0)
+        causas = actual.causas_de_caida(anterior)
+        self.assertEqual(causas[0]['texto'], 'dejó de cumplir su meta')
+
+    def test_nombre_con_html_se_escapa(self):
+        anterior = RegistroSalud.objects.create(
+            proyecto=self.proyecto,
+            fecha=self.hoy - timedelta(days=2),
+            indice=90.0,
+        )
+        actual = RegistroSalud.objects.create(
+            proyecto=self.proyecto,
+            fecha=self.hoy - timedelta(days=1),
+            indice=10.0,
+        )
+        nombre = '<img src=x onerror=alert(1)>'
+        anterior.detalles.create(tipo='TECNICA', nombre=nombre, valor=90.0)
+        actual.detalles.create(tipo='TECNICA', nombre=nombre, valor=10.0)
+        respuesta = self.client.get(self.url)
+        self.assertNotContains(respuesta, '<img src=x')
+
+
+class EstadoMetricasHU14Tests(TestCase):
+    def setUp(self):
+        self.proyecto = crear_proyecto('Alpha')
+        self.autor = self.proyecto.agregar_miembro(
+            Persona.objects.create(nombre='Ana'), 'QA'
+        )
+        modelo = ModeloCalidad.obtener_predefinidos().first()
+        self.aplicado = self.proyecto.aplicar_modelo(modelo)
+        self.metricas = list(self.aplicado.metricas_aplicadas())
+
+    def medir(self, instantanea, cumple, fecha=None):
+        umbral = instantanea.umbral
+        if instantanea.tipo_umbral == 'MINIMO':
+            valor = umbral if cumple else umbral - 1
+        else:
+            valor = umbral if cumple else umbral + 1
+        return RevisionMetrica.objects.create(
+            metrica_aplicada=instantanea,
+            miembro_proyecto=self.autor,
+            valor=valor,
+            enlace='https://ejemplo.test/evidencia',
+            fecha=fecha or timezone.localdate(),
+        )
+
+    def test_indice_igual_no_es_caida(self):
+        hoy = timezone.localdate()
+        registros = [
+            RegistroSalud.objects.create(
+                proyecto=self.proyecto,
+                fecha=hoy - timedelta(days=dias),
+                indice=50.0,
+            )
+            for dias in (2, 1)
+        ]
+        self.assertEqual(caidas_salud(registros), [])
+
+    def test_tecnica_nueva_con_buen_avance_no_es_causa(self):
+        hoy = timezone.localdate()
+        anterior = RegistroSalud.objects.create(
+            proyecto=self.proyecto,
+            fecha=hoy - timedelta(days=2),
+            indice=60.0,
+        )
+        anterior.detalles.create(tipo='TECNICA', nombre='A', valor=60.0)
+        actual = RegistroSalud.objects.create(
+            proyecto=self.proyecto,
+            fecha=hoy - timedelta(days=1),
+            indice=50.0,
+        )
+        actual.detalles.create(tipo='TECNICA', nombre='A', valor=20.0)
+        actual.detalles.create(tipo='TECNICA', nombre='B', valor=80.0)
+        causas = actual.causas_de_caida(anterior)
+        self.assertEqual([causa['nombre'] for causa in causas], ['A'])
+
+    def test_causas_explican_cada_tipo_de_cambio(self):
+        registro = RegistroSalud.objects.create(
+            proyecto=self.proyecto, indice=50.0
+        )
+        metrica = registro.detalles.create(
+            tipo='METRICA', nombre='M', valor=0.0
+        )
+        tecnica = registro.detalles.create(
+            tipo='TECNICA', nombre='T', valor=20.0
+        )
+        casos = (
+            (metrica, None, 0.0, 'se agregó sin cumplir su meta'),
+            (metrica, 100.0, None, 'se quitó cuando cumplía su meta'),
+            (metrica, 100.0, 0.0, 'dejó de cumplir su meta'),
+            (tecnica, None, 20.0, 'se agregó con 20 % de avance'),
+            (tecnica, 80.0, None, 'se quitó cuando tenía 80 % de avance'),
+            (tecnica, 80.0, 20.5, 'bajó de 80 % a 20.5 % de avance'),
+        )
+        for detalle, antes, despues, texto in casos:
+            causa = detalle.describir_cambio(antes, despues)
+            self.assertEqual(causa['texto'], texto)
+
+    def test_coincide_con_el_cumplimiento_de_cada_metrica(self):
+        self.medir(self.metricas[0], True)
+        self.medir(self.metricas[1], False)
+        estados = self.proyecto.estado_metricas()
+        for (nombre, valor), instantanea in zip(estados, self.metricas):
+            self.assertEqual(nombre, instantanea.metrica.nombre)
+            self.assertEqual(
+                valor == 100.0,
+                instantanea.metrica.esta_aceptada(self.proyecto),
+            )
+
+    def test_usa_la_medicion_mas_reciente(self):
+        hoy = timezone.localdate()
+        self.medir(self.metricas[0], False, hoy)
+        self.medir(self.metricas[0], True, hoy - timedelta(days=5))
+        self.assertEqual(self.proyecto.estado_metricas()[0][1], 0.0)
+
+    def test_metrica_inactiva_no_cuenta(self):
+        total = len(self.metricas)
+        self.metricas[0].activa = False
+        self.metricas[0].save()
+        self.assertEqual(len(self.proyecto.estado_metricas()), total - 1)
+
+    def test_nombres_repetidos_cuentan_por_separado(self):
+        total = len(self.metricas)
+        self.metricas[1].metrica.nombre = self.metricas[0].metrica.nombre
+        self.metricas[1].metrica.save()
+        self.assertEqual(len(self.proyecto.estado_metricas()), total)
+
+    def test_consultas_no_crecen_con_las_mediciones(self):
+        for instantanea in self.metricas:
+            self.medir(instantanea, True)
+        with self.assertNumQueries(3):
+            self.proyecto.estado_metricas()
+
+    def test_tablero_registra_una_caida_real_de_metrica(self):
+        url = reverse('reportes:tablero', args=[self.proyecto.pk])
+        hoy = timezone.localdate()
+        self.medir(self.metricas[0], True, hoy - timedelta(days=4))
+        self.client.get(url)
+        registro = self.proyecto.registros_salud.get(fecha=hoy)
+        registro.fecha = hoy - timedelta(days=3)
+        registro.save()
+        self.medir(self.metricas[0], False, hoy)
+        respuesta = self.client.get(url)
+        caida = respuesta.context['caidas'][0]
+        self.assertEqual(
+            caida['causas'][0]['nombre'], self.metricas[0].metrica.nombre
+        )
+        self.assertContains(respuesta, 'dejó de cumplir su meta')

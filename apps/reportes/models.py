@@ -115,10 +115,22 @@ class Proyecto(models.Model):
         return self.periodo() == periodo
 
     def indice_salud(self):
-        """Promedio provisional del avance de las técnicas activas (0-100).
+        """Índice de 0 a 100: promedia técnicas y métricas (HU-14).
 
-        La fórmula definitiva corresponde a HU-14 (sin diseño). Ver D8.
+        Cada parte vale lo mismo. Si el proyecto solo tiene una, el índice es
+        esa parte; si no tiene ninguna, no hay índice.
         """
+        partes = [
+            parte
+            for parte in (self.avance_tecnicas(), self.cumplimiento_metricas())
+            if parte is not None
+        ]
+        if not partes:
+            return None
+        return round(sum(partes) / len(partes), 1)
+
+    def avance_tecnicas(self):
+        """Promedio del avance de las técnicas activas, o None si no hay."""
         avances = list(
             self.seguimientos_tecnicas.filter(activa=True).values_list(
                 'porcentaje_avance', flat=True
@@ -126,7 +138,36 @@ class Proyecto(models.Model):
         )
         if not avances:
             return None
-        return round(sum(avances) / len(avances), 1)
+        return sum(avances) / len(avances)
+
+    def cumplimiento_metricas(self):
+        """Porcentaje de métricas activas que cumplen, o None si no hay."""
+        valores = [valor for _, valor in self.estado_metricas()]
+        if not valores:
+            return None
+        return sum(valores) / len(valores)
+
+    def estado_metricas(self):
+        """Cada métrica activa con su nombre y 100 si cumple o 0 si no."""
+        aplicado = self.modelo_aplicado_vigente()
+        if aplicado is None:
+            return []
+        ultimos = {}
+        for metrica_id, valor in self.revisiones().order_by(
+            '-fecha', '-pk'
+        ).values_list('metrica_aplicada__metrica_id', 'valor'):
+            ultimos.setdefault(metrica_id, valor)
+        return [
+            (
+                instantanea.metrica.nombre,
+                100.0
+                if instantanea.evaluar_cumplimiento(
+                    ultimos.get(instantanea.metrica_id)
+                )
+                else 0.0,
+            )
+            for instantanea in aplicado.metricas_aplicadas().filter(activa=True)
+        ]
 
     # --- Equipo ---------------------------------------------------------
 
@@ -302,6 +343,107 @@ class RegistroSalud(models.Model):
     def __str__(self):
         return f'{self.proyecto} · {self.fecha} · {self.indice}'
 
+    @transaction.atomic
+    def guardar_detalles(self, proyecto):
+        """Guarda cómo estaba cada técnica y métrica en este registro."""
+        self.detalles.all().delete()
+        detalles = [
+            DetalleSalud(
+                registro=self,
+                tipo=TipoDetalleSalud.TECNICA,
+                nombre=seguimiento.tecnica.nombre,
+                valor=seguimiento.porcentaje_avance,
+            )
+            for seguimiento in proyecto.seguimientos_activos()
+        ]
+        detalles += [
+            DetalleSalud(
+                registro=self,
+                tipo=TipoDetalleSalud.METRICA,
+                nombre=nombre,
+                valor=valor,
+            )
+            for nombre, valor in proyecto.estado_metricas()
+        ]
+        DetalleSalud.objects.bulk_create(detalles)
+
+    def causas_de_caida(self, anterior):
+        """Técnicas y métricas que bajaron respecto al registro anterior."""
+        previos = {
+            (detalle.tipo, detalle.nombre): detalle
+            for detalle in anterior.detalles.all()
+        }
+        if not previos:
+            return []
+        causas = []
+        for detalle in self.detalles.all():
+            previo = previos.pop((detalle.tipo, detalle.nombre), None)
+            if previo is None:
+                bajo = detalle.valor < anterior.indice
+            else:
+                bajo = detalle.valor < previo.valor
+            if bajo:
+                causas.append(
+                    detalle.describir_cambio(
+                        previo.valor if previo else None, detalle.valor
+                    )
+                )
+        for previo in previos.values():
+            if previo.valor > self.indice:
+                causas.append(previo.describir_cambio(previo.valor, None))
+        return causas
+
+
+class TipoDetalleSalud(models.TextChoices):
+    """Indica si un detalle de salud es de una técnica o de una métrica."""
+
+    TECNICA = 'TECNICA', 'Técnica'
+    METRICA = 'METRICA', 'Métrica'
+
+
+class DetalleSalud(models.Model):
+    """Estado de una técnica o métrica al guardar un registro de salud."""
+
+    registro = models.ForeignKey(
+        RegistroSalud,
+        on_delete=models.CASCADE,
+        related_name='detalles',
+    )
+    tipo = models.CharField(max_length=10, choices=TipoDetalleSalud.choices)
+    nombre = models.CharField(max_length=200)
+    valor = models.FloatField()
+
+    class Meta:
+        verbose_name = 'detalle de salud'
+        verbose_name_plural = 'detalles de salud'
+        ordering = ['tipo', 'nombre']
+
+    def __str__(self):
+        return f'{self.registro} · {self.nombre} · {self.valor}'
+
+    def describir_cambio(self, antes, despues):
+        """Devuelve la causa de una caída con un texto fácil de leer."""
+        if self.tipo == TipoDetalleSalud.METRICA:
+            if antes is None:
+                texto = 'se agregó sin cumplir su meta'
+            elif despues is None:
+                texto = 'se quitó cuando cumplía su meta'
+            else:
+                texto = 'dejó de cumplir su meta'
+        elif antes is None:
+            texto = f'se agregó con {despues:g} % de avance'
+        elif despues is None:
+            texto = f'se quitó cuando tenía {antes:g} % de avance'
+        else:
+            texto = f'bajó de {antes:g} % a {despues:g} % de avance'
+        return {
+            'tipo': self.get_tipo_display(),
+            'nombre': self.nombre,
+            'antes': antes,
+            'despues': despues,
+            'texto': texto,
+        }
+
 
 def registrar_salud(proyecto):
     """Guarda o refresca el índice de salud del proyecto para hoy."""
@@ -313,12 +455,30 @@ def registrar_salud(proyecto):
         fecha=timezone.localdate(),
         defaults={'indice': indice},
     )
+    registro.guardar_detalles(proyecto)
     return registro
 
 
-def tendencia_salud(proyecto, limite=6):
-    """Devuelve los últimos registros de salud, del más antiguo al más nuevo."""
-    registros = list(
-        proyecto.registros_salud.order_by('-fecha')[:limite]
-    )
-    return list(reversed(registros))
+def tendencia_salud(proyecto, limite=6, desde=None, hasta=None):
+    """Devuelve los registros de salud, del más antiguo al más nuevo."""
+    registros = proyecto.registros_salud.prefetch_related('detalles')
+    if desde:
+        registros = registros.filter(fecha__gte=desde)
+    if hasta:
+        registros = registros.filter(fecha__lte=hasta)
+    return list(reversed(registros.order_by('-fecha')[:limite]))
+
+
+def caidas_salud(registros):
+    """Caídas entre registros consecutivos, de la más nueva a la más antigua."""
+    caidas = [
+        {
+            'fecha': actual.fecha,
+            'antes': anterior.indice,
+            'despues': actual.indice,
+            'causas': actual.causas_de_caida(anterior),
+        }
+        for anterior, actual in zip(registros, registros[1:])
+        if actual.indice < anterior.indice
+    ]
+    return list(reversed(caidas))
