@@ -1,4 +1,6 @@
+import time
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -1000,9 +1002,14 @@ class AplicarModeloViewTests(TestCase):
             enlace='https://ejemplo.test/a',
         )
 
+        aviso = self.client.post(self.url, {'modelo_id': self.otro.pk})
         respuesta = self.client.post(
             self.url,
-            {'modelo_id': self.otro.pk, 'confirmacion': '1'},
+            {
+                'modelo_id': self.otro.pk,
+                'confirmacion': '1',
+                'contexto_confirmacion': aviso.context['contexto_confirmacion'],
+            },
         )
 
         self.assertRedirects(
@@ -1019,6 +1026,144 @@ class AplicarModeloViewTests(TestCase):
             ModeloAplicado.objects.filter(proyecto=self.proyecto).count(),
             2,
         )
+
+
+class ConfirmacionModeloViewTests(TestCase):
+    """El consentimiento solo se aplica al proyecto, destino y estado vistos."""
+
+    def setUp(self):
+        """Prepara un proyecto con modelo vigente y una medición histórica."""
+        self.proyecto = crear_proyecto('Alpha')
+        self.modelo = ModeloCalidad.objects.get(nombre='McCall')
+        self.destino = ModeloCalidad.objects.get(nombre='FURPS')
+        self.tercero = ModeloCalidad.objects.get(nombre='Boehm')
+        self.aplicado = self.proyecto.aplicar_modelo(self.modelo)
+        persona = Persona.objects.create(nombre='Ana')
+        miembro = MiembroProyecto.objects.create(
+            proyecto=self.proyecto, persona=persona, rol='QA'
+        )
+        self.revision = RevisionMetrica.objects.create(
+            metrica_aplicada=self.aplicado.metricas_aplicadas().first(),
+            miembro_proyecto=miembro,
+            valor=90,
+            enlace='https://ejemplo.test/evidencia',
+        )
+        self.url = reverse('reportes:aplicar_modelo', args=[self.proyecto.pk])
+
+    def _contexto(self):
+        """Obtiene el contexto que el formulario envía al confirmar."""
+        aviso = self.client.post(self.url, {'modelo_id': self.destino.pk})
+        self.assertTrue(aviso.context['requiere_confirmacion'])
+        contexto = aviso.context['contexto_confirmacion']
+        self.assertContains(aviso, f'value="{contexto}"')
+        return contexto
+
+    def _confirmar(self, contexto, modelo=None, url=None):
+        """Envía la confirmación desde una pantalla previamente consultada."""
+        return self.client.post(url or self.url, {
+            'modelo_id': (modelo or self.destino).pk,
+            'confirmacion': '1',
+            'contexto_confirmacion': contexto,
+        })
+
+    def _assert_sin_cambio(self, respuesta, aplicado, cantidad):
+        """Comprueba nueva confirmación y ausencia de cambios en el historial."""
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertTrue(respuesta.context['requiere_confirmacion'])
+        self.assertTrue(respuesta.context['contexto_confirmacion'])
+        self.assertEqual(self.proyecto.modelo_aplicado_vigente().pk, aplicado.pk)
+        self.assertEqual(self.proyecto.modelos_aplicados.count(), cantidad)
+        self.revision.refresh_from_db()
+
+    def test_bandera_sin_contexto_no_confirma(self):
+        """El parámetro confirmacion=1 por sí solo no acredita consentimiento."""
+        respuesta = self._confirmar('')
+        self._assert_sin_cambio(respuesta, self.aplicado, 1)
+
+    def test_contexto_modificado_no_confirma(self):
+        """Un contexto alterado devuelve una decisión nueva sin escrituras."""
+        respuesta = self._confirmar(self._contexto() + 'alterado')
+        self._assert_sin_cambio(respuesta, self.aplicado, 1)
+
+    def test_contexto_vencido_pide_confirmacion_nueva(self):
+        """La confirmación expira después de los treinta minutos permitidos."""
+        contexto = self._contexto()
+        with patch('django.core.signing.time.time', return_value=time.time() + 1801):
+            respuesta = self._confirmar(contexto)
+        self._assert_sin_cambio(respuesta, self.aplicado, 1)
+
+    def test_contexto_no_se_reutiliza_para_otro_destino(self):
+        """La aprobación para FURPS no autoriza aplicar Boehm."""
+        respuesta = self._confirmar(self._contexto(), modelo=self.tercero)
+        self._assert_sin_cambio(respuesta, self.aplicado, 1)
+
+    def test_contexto_no_se_reutiliza_para_otro_proyecto(self):
+        """Un proyecto con el mismo modelo exige su propio consentimiento."""
+        contexto = self._contexto()
+        otro = crear_proyecto('Beta')
+        aplicado = otro.aplicar_modelo(self.modelo)
+        miembro = MiembroProyecto.objects.create(
+            proyecto=otro,
+            persona=self.revision.miembro_proyecto.persona,
+            rol='QA',
+        )
+        RevisionMetrica.objects.create(
+            metrica_aplicada=aplicado.metricas_aplicadas().first(),
+            miembro_proyecto=miembro,
+            valor=90,
+            enlace='https://ejemplo.test/otro',
+        )
+        url = reverse('reportes:aplicar_modelo', args=[otro.pk])
+        respuesta = self._confirmar(contexto, url=url)
+        self.assertTrue(respuesta.context['requiere_confirmacion'])
+        self.assertEqual(otro.modelo_aplicado_vigente().pk, aplicado.pk)
+        self.assertEqual(otro.modelos_aplicados.count(), 1)
+
+    def test_cambio_entre_aviso_y_confirmacion_exige_decision_nueva(self):
+        """Una confirmación de McCall no reemplaza silenciosamente a Boehm."""
+        contexto = self._contexto()
+        tercero = self.proyecto.aplicar_modelo(self.tercero)
+        respuesta = self._confirmar(contexto)
+        self._assert_sin_cambio(respuesta, tercero, 2)
+        self.assertContains(respuesta, 'la configuración cambió')
+        nuevo_contexto = respuesta.context['contexto_confirmacion']
+        self.assertEqual(self._confirmar(nuevo_contexto).status_code, 302)
+        self.assertEqual(
+            self.proyecto.modelo_aplicado_vigente().modelo_calidad_id,
+            self.destino.pk,
+        )
+
+    def test_volver_al_mismo_modelo_no_rehabilita_el_contexto_anterior(self):
+        """La identidad de la aplicación distingue el ciclo McCall-Boehm-McCall."""
+        contexto = self._contexto()
+        self.proyecto.aplicar_modelo(self.tercero)
+        nuevo = self.proyecto.aplicar_modelo(self.modelo)
+        respuesta = self._confirmar(contexto)
+        self._assert_sin_cambio(respuesta, nuevo, 3)
+
+    def test_repetir_confirmacion_no_duplica_aplicaciones(self):
+        """Reenviar una confirmación ya aplicada conserva el resultado vigente."""
+        contexto = self._contexto()
+        self.assertEqual(self._confirmar(contexto).status_code, 302)
+        aplicado = self.proyecto.modelo_aplicado_vigente()
+        respuesta = self._confirmar(contexto)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(self.proyecto.modelo_aplicado_vigente().pk, aplicado.pk)
+        self.assertEqual(self.proyecto.modelos_aplicados.count(), 2)
+
+    def test_fallo_al_crear_instantanea_revierte_el_cambio(self):
+        """Un fallo tras cerrar el modelo anterior conserva toda su aplicación."""
+        contexto = self._contexto()
+        with patch.object(
+            ModeloAplicado, 'crear_instantanea', side_effect=RuntimeError('fallo')
+        ):
+            with self.assertRaises(RuntimeError):
+                self._confirmar(contexto)
+        self.assertEqual(
+            self.proyecto.modelo_aplicado_vigente().pk, self.aplicado.pk
+        )
+        self.assertEqual(self.proyecto.modelos_aplicados.count(), 1)
+        self.revision.refresh_from_db()
 
 
 class RegistrarRevisionMetricaViewTests(TestCase):

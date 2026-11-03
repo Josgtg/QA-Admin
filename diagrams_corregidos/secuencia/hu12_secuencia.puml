@@ -1,0 +1,49 @@
+@startuml hu12_secuencia
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+box "Template Layer"
+  participant "DetalleTecnicaTemplate" as UI
+end box
+box "View Layer (tecnicas.view)"
+  participant "DetalleTecnicaView" as View
+end box
+box "Model Layer (tecnicas.model)"
+  participant "t: TecnicaQA" as Tecnica
+end box
+
+== Consultar pasos, pregunta clave y evidencia esperada (HU-12) ==
+
+Encargado -> UI: abrir(tecnica_id)
+UI -> View: get(request, tecnica_id)
+activate View
+View -> View: obtener_tecnica(tecnica_id)
+View --> View: tecnica: TecnicaQA o Http404
+
+alt Técnica inexistente
+  View --> UI: HttpResponse (404)
+  UI --> Encargado: Técnica no encontrada
+else Técnica disponible
+  View -> View: obtener_pasos(tecnica)
+  View -> Tecnica: obtener_pasos()
+  activate Tecnica
+  Tecnica --> View: pasos: QuerySet<Paso> ordenado por orden
+  deactivate Tecnica
+  View --> View: pasos: QuerySet<Paso>
+  View --> UI: HttpResponse (200, tecnica, pasos)
+  UI --> Encargado: Nombre, objetivo, descripción y pregunta clave
+  alt Hay pasos definidos
+    UI --> Encargado: Lista ordenada con instrucción y evidencia esperada
+  else Técnica sin pasos
+    UI --> Encargado: Esta técnica todavía no tiene pasos definidos
+  end
+end
+deactivate View
+
+note over UI, View
+  La consulta está disponible desde el catálogo de técnicas.
+  El seguimiento del proyecto es información opcional.
+  Las ocho técnicas base tienen al menos un paso definido.
+end note
+@enduml

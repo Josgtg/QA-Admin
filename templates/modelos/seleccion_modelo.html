@@ -58,6 +58,7 @@
             {% csrf_token %}
             <input type="hidden" name="modelo_id" value="{{ modelo.pk }}">
             <input type="hidden" name="confirmacion" value="1">
+            <input type="hidden" name="contexto_confirmacion" value="{{ contexto_confirmacion }}">
             <button class="btn btn-primary" type="submit">
                 Sí, cambiar el modelo
             </button>

@@ -15,7 +15,7 @@ actor "Encargado de QA" as Encargado
 package "modelos.template" #EEEDFE {
   class SeleccionModeloTemplate {
     + abrir(proyecto_id: int): void
-    + seleccionar(modelo_id: int, confirmacion: boolean): void
+    + seleccionar(modelo_id: int, confirmacion: boolean, contexto_confirmacion: String): void
     + cancelar(): void
   }
 }
@@ -25,7 +25,6 @@ package "modelos.view" #EEEDFE {
     + get(request: HttpRequest, proyecto_id: int): HttpResponse
     + post(request: HttpRequest, proyecto_id: int): HttpResponse
     + obtener_modelo_aplicado_vigente(proyecto: Proyecto): ModeloAplicado
-    + solicitar_confirmacion(proyecto: Proyecto, modelo: ModeloCalidad): boolean
   }
 }
 
@@ -39,7 +38,8 @@ package "reportes.model" #FAEEDA {
     + historial_modelos(): List<ModeloAplicado>
     + modelo_aplicado_vigente(): ModeloAplicado
     + tiene_mediciones(): boolean
-    + aplicar_modelo(modelo: ModeloCalidad): ModeloAplicado
+    + aplicar_modelo(modelo_calidad: ModeloCalidad, verificar_confirmacion: boolean = false, contexto_confirmacion: String [0..1] = null): ModeloAplicado
+    + validar_confirmacion_modelo(modelo_calidad: ModeloCalidad, vigente: ModeloAplicado [0..1], contexto_confirmacion: String [0..1]): void
   }
 }
 
@@ -92,7 +92,7 @@ package "modelos.model" #EEEDFE {
     - vigente: boolean
     + es_vigente(): boolean
     + cerrar(): void
-    + crear_instantanea(): void
+    + crear_instantanea(): List<MetricaAplicada>
     + metricas_comunes(otro: ModeloAplicado): List<Metrica>
   }
 
@@ -120,8 +120,8 @@ Encargado ..> SeleccionModeloTemplate : interactúa
 SeleccionModeloTemplate ..> AplicarModeloView : solicitud
 AplicarModeloView ..> Proyecto : aplica modelo
 AplicarModeloView ..> ModeloCalidad : consulta catálogo
-AplicarModeloView ..> ModeloAplicado : crea / cierra
-AplicarModeloView ..> MetricaAplicada : copia instantánea
+Proyecto ..> ModeloAplicado : crea / cierra
+ModeloAplicado ..> MetricaAplicada : copia instantánea
 
 note right of ModeloAplicado
   Un proyecto puede tener varias aplicaciones
@@ -153,6 +153,18 @@ note bottom of Proyecto
   (HU-01) a través de las instantáneas del
   proyecto; no se dibuja aquí para no duplicar
   el diseño de esa historia.
+
+  aplicar_modelo() reserva la escritura antes de
+  consultar la aplicación vigente, también en SQLite.
+  Validación, cierre y copia ocurren en una transacción.
+  Las vistas usan verificar_confirmacion=true.
+  Los llamadores internos conservan el contrato anterior.
+
+  validar_confirmacion_modelo() comprueba una firma
+  con proyecto, modelo destino e ID de aplicación.
+  La firma vence a los 30 minutos. Un estado distinto,
+  contexto ausente o firma inválida producen
+  ValidationError con un contexto nuevo para decidir.
 end note
 
 note bottom of ModeloCalidad

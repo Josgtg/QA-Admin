@@ -1,5 +1,6 @@
 from datetime import date
 
+from django.core import signing
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
@@ -227,9 +228,19 @@ class Proyecto(models.Model):
         return self.revisiones().exists()
 
     @transaction.atomic
-    def aplicar_modelo(self, modelo_calidad):
-        """Aplica un modelo predefinido y crea su instantánea (HU-02)."""
+    def aplicar_modelo(
+        self, modelo_calidad, *, verificar_confirmacion=False,
+        contexto_confirmacion=None,
+    ):
+        """Aplica el modelo atómicamente y verifica el consentimiento de la UI.
+
+        Las vistas pasan verificar_confirmacion=True. Se conserva el contrato
+        de los llamadores internos que ya gestionan la decisión de cambio.
+        """
         from apps.modelos.models import ModeloAplicado
+
+        # Reserva la escritura antes de leer el estado, también en SQLite.
+        Proyecto.objects.filter(pk=self.pk).update(nombre=models.F('nombre'))
 
         if not modelo_calidad.modelo_metricas.exists():
             raise ValidationError(
@@ -243,6 +254,12 @@ class Proyecto(models.Model):
         vigente = self.modelo_aplicado_vigente()
         if vigente is not None and vigente.modelo_calidad_id == modelo_calidad.pk:
             return vigente
+        if verificar_confirmacion and (
+            contexto_confirmacion or (vigente and self.tiene_mediciones())
+        ):
+            self.validar_confirmacion_modelo(
+                modelo_calidad, vigente, contexto_confirmacion
+            )
         if vigente is not None:
             vigente.cerrar()
 
@@ -252,6 +269,32 @@ class Proyecto(models.Model):
         )
         aplicado.crear_instantanea()
         return aplicado
+
+    def validar_confirmacion_modelo(
+        self, modelo_calidad, vigente, contexto_confirmacion
+    ):
+        """Exige una confirmación firmada del estado vigente, válida 30 minutos."""
+        estado = {
+            'proyecto': self.pk,
+            'modelo': modelo_calidad.pk,
+            'aplicacion': vigente.pk if vigente else None,
+        }
+        salt = 'reportes.confirmacion_modelo'
+        try:
+            confirmado = signing.loads(
+                contexto_confirmacion or '', salt=salt, max_age=1800
+            )
+        except signing.BadSignature:
+            confirmado = None
+        if confirmado != estado:
+            raise ValidationError(
+                'La confirmación venció o la configuración cambió. '
+                'Revisa el modelo vigente y confirma de nuevo.',
+                code='confirmacion_requerida',
+                params={
+                    'contexto_confirmacion': signing.dumps(estado, salt=salt),
+                },
+            )
 
     def cambiar_modelo(self, modelo_calidad):
         return self.aplicar_modelo(modelo_calidad)
