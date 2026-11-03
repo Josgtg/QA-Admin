@@ -2,6 +2,11 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
+from .validators import (
+    validar_extension_evidencia,
+    validar_tamano_evidencia,
+)
+
 
 class Dimension(models.TextChoices):
     ESPECIFICACION = 'ESPECIFICACION', 'Especificación'
@@ -211,7 +216,16 @@ class Evidencia(models.Model):
         related_name='evidencias',
     )
     enlace = models.URLField(max_length=500, blank=True)
-    archivo = models.FileField(upload_to='evidencias/pasos/', blank=True)
+    archivo = models.FileField(
+        upload_to='evidencias/pasos/',
+        blank=True,
+        max_length=255,
+        validators=[validar_extension_evidencia, validar_tamano_evidencia],
+    )
+    fecha = models.DateField(
+        default=timezone.localdate,
+        verbose_name='fecha de la evidencia',
+    )
     fecha_registro = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -230,6 +244,22 @@ class Evidencia(models.Model):
 
     def tiene_enlace_o_archivo(self):
         return bool(self.enlace or self.archivo)
+
+    def nombre_archivo(self):
+        """Devuelve el nombre del archivo sin la ruta de almacenamiento."""
+        if not self.archivo:
+            return ''
+        return self.archivo.name.rsplit('/', 1)[-1]
+
+    def descripcion(self):
+        """Texto breve que identifica la evidencia en la interfaz."""
+        if self.archivo:
+            return self.nombre_archivo()
+        return self.enlace or 'Evidencia sin contenido'
+
+    def abrir_archivo(self):
+        """Abre el archivo adjunto en modo lectura para servirlo."""
+        return self.archivo.open('rb')
 
     def clean(self):
         errores = {}

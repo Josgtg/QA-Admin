@@ -1,7 +1,10 @@
+import shutil
+import tempfile
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -17,6 +20,7 @@ from .models import (
 )
 from .selection import SESSION_KEY
 from .services import seguir_tecnica
+from .validators import TAMANO_MAXIMO_BYTES
 
 
 def crear_proyecto(nombre='Proyecto de prueba'):
@@ -424,3 +428,137 @@ class CatalogoSeleccionTests(TestCase):
 
         self.assertRedirects(respuesta, self.url)
         self.assertFalse(SeguimientoTecnica.objects.exists())
+
+
+MEDIA_TEMPORAL = tempfile.mkdtemp(prefix='qa-admin-evidencias-')
+
+
+@override_settings(MEDIA_ROOT=MEDIA_TEMPORAL)
+class EvidenciaArchivoTests(TestCase):
+    """Archivo, fecha y apertura de la evidencia (HU-10)."""
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(MEDIA_TEMPORAL, ignore_errors=True)
+
+    def setUp(self):
+        self.proyecto = crear_proyecto()
+        self.miembro = crear_miembro(self.proyecto)
+        self.tecnica = crear_tecnica()
+        self.tecnica.pasos.create(
+            orden=1,
+            instruccion='Revisar el estándar',
+            evidencia_esperada='Archivo o enlace',
+        )
+        self.seguimiento = seguir_tecnica(self.proyecto, self.tecnica)
+        self.paso = self.seguimiento.pasos.first()
+        self.url = reverse(
+            'tecnicas:registrar_evidencia', args=[self.paso.pk]
+        )
+
+    def _datos(self, **extra):
+        datos = {
+            'miembro_proyecto': self.miembro.pk,
+            'fecha': timezone.localdate().isoformat(),
+            'comentario': 'Con comentario',
+        }
+        datos.update(extra)
+        return datos
+
+    def test_guarda_la_fecha_declarada(self):
+        fecha = timezone.localdate() - timedelta(days=2)
+
+        self.client.post(
+            self.url,
+            self._datos(
+                enlace='https://ejemplo.test/evidencia',
+                fecha=fecha.isoformat(),
+            ),
+        )
+
+        self.assertEqual(Evidencia.objects.get().fecha, fecha)
+
+    def test_sin_fecha_usa_la_de_hoy(self):
+        self.client.post(
+            self.url,
+            {
+                'miembro_proyecto': self.miembro.pk,
+                'enlace': 'https://ejemplo.test/evidencia',
+            },
+        )
+
+        self.assertEqual(Evidencia.objects.get().fecha, timezone.localdate())
+
+    def test_rechaza_un_formato_no_permitido(self):
+        archivo = SimpleUploadedFile(
+            'evidencia.exe',
+            b'contenido',
+            content_type='application/octet-stream',
+        )
+
+        respuesta = self.client.post(self.url, self._datos(archivo=archivo))
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'Formato no permitido')
+        self.assertContains(respuesta, 'PDF')
+        self.assertFalse(Evidencia.objects.exists())
+
+    def test_rechaza_un_archivo_demasiado_grande(self):
+        archivo = SimpleUploadedFile(
+            'reporte.pdf',
+            b'x' * (TAMANO_MAXIMO_BYTES + 1),
+            content_type='application/pdf',
+        )
+
+        respuesta = self.client.post(self.url, self._datos(archivo=archivo))
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'tamaño máximo')
+        self.assertFalse(Evidencia.objects.exists())
+
+    def test_archivo_valido_se_guarda_y_se_abre(self):
+        archivo = SimpleUploadedFile(
+            'evidencia.png',
+            b'\x89PNG\r\n\x1a\n',
+            content_type='image/png',
+        )
+
+        respuesta = self.client.post(self.url, self._datos(archivo=archivo))
+
+        self.assertEqual(respuesta.status_code, 302)
+        evidencia = Evidencia.objects.get()
+        self.assertTrue(evidencia.archivo)
+
+        apertura = self.client.get(
+            reverse('tecnicas:abrir_evidencia', args=[evidencia.pk])
+        )
+        self.assertEqual(apertura.status_code, 200)
+        self.assertEqual(
+            b''.join(apertura.streaming_content),
+            b'\x89PNG\r\n\x1a\n',
+        )
+
+    def test_el_enlace_se_abre_redirigiendo(self):
+        self.client.post(
+            self.url,
+            self._datos(enlace='https://ejemplo.test/evidencia'),
+        )
+        evidencia = Evidencia.objects.get()
+
+        respuesta = self.client.get(
+            reverse('tecnicas:abrir_evidencia', args=[evidencia.pk])
+        )
+
+        self.assertRedirects(
+            respuesta,
+            'https://ejemplo.test/evidencia',
+            fetch_redirect_response=False,
+        )
+
+    def test_abrir_evidencia_inexistente_da_404(self):
+        respuesta = self.client.get(
+            reverse('tecnicas:abrir_evidencia', args=[999999])
+        )
+
+        self.assertEqual(respuesta.status_code, 404)

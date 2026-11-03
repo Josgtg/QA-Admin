@@ -217,6 +217,10 @@
                     {% else %}
                     <span class="tech-status gray">Pendiente</span>
                     {% endif %}
+                    <a class="link"
+                       href="{% url 'tecnicas:seguimiento' %}?proyecto={{ proyecto.pk }}">
+                        Ver pasos
+                    </a>
                 </div>
                 {% empty %}
                 <p class="muted">Este proyecto no tiene técnicas en seguimiento.</p>
