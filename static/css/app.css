@@ -2486,3 +2486,29 @@ table.data {
     min-width: 0;
     width: 110px;
 }
+
+/* Reporte rapido (HU-18) ------------------------------------------------ */
+.attention-card {
+    border-top: 3px solid var(--red);
+}
+
+.attention-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 22px;
+}
+
+.attention-title {
+    margin: 0 0 10px;
+    color: #374151;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+    .attention-grid {
+        grid-template-columns: 1fr;
+    }
+}

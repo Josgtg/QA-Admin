@@ -36,6 +36,10 @@
                 <svg class="icon icon-sm"><use href="#i-pencil"></use></svg>
                 Editar
             </a>
+            <a class="btn btn-outline" href="{% url 'reportes:reporte' proyecto.pk %}">
+                <svg class="icon icon-sm"><use href="#i-clipboard"></use></svg>
+                Reporte
+            </a>
             <a class="btn btn-outline" href="{% url 'tecnicas:seguimiento' %}">
                 <svg class="icon icon-sm"><use href="#i-techniques"></use></svg>
                 Técnicas

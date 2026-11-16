@@ -1,0 +1,145 @@
+@startuml hu18_clases
+allowmixing
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam nodesep 70
+skinparam ranksep 95
+top to bottom direction
+
+title Clases: reporte rápido del estado del proyecto (HU-18)
+
+actor "Encargado de QA" as Encargado
+
+package "reportes.template" #FAEEDA {
+  class ReporteProyectoTemplate
+}
+
+package "reportes.view" #FAEEDA {
+  class ReporteProyectoView {
+    + get(request: HttpRequest, proyecto_id: int): HttpResponse
+    + obtener_resumen(proyecto: Proyecto): ResumenReporte
+    + metricas_de_atencion(proyecto: Proyecto): List<MetricaAplicada>
+    + tecnicas_con_pendientes(proyecto: Proyecto): List<SeguimientoTecnica>
+    + ultima_actividad(proyecto: Proyecto): Date
+    + faltantes(proyecto: Proyecto): List<String>
+  }
+}
+
+package "reportes.model" #FAEEDA {
+  class Proyecto {
+    - id: int
+    - nombre: String
+    - fecha_inicio: Date
+    - fecha_fin: Date
+    + indice_salud(): Float
+    + cumplimiento_metricas(): Float
+    + avance_tecnicas(): Float
+    + estado_metricas(): List
+    + modelo_aplicado_vigente(): ModeloAplicado
+    + seguimientos_activos(): List<SeguimientoTecnica>
+    + ultima_medicion(): Date
+    + ultima_evidencia(): Date
+  }
+
+  class ResumenReporte <<DTO>> {
+    - salud: Float
+    - cumplimiento: Float
+    - avance: Float
+    - ultima_actividad: Date
+    + por_dimension(): List
+    + esta_vacio(): boolean
+  }
+}
+
+package "modelos.model" #EEEDFE {
+  class ModeloAplicado {
+    - id: int
+    - fecha_aplicacion: Date
+    - vigente: boolean
+  }
+
+  class MetricaAplicada {
+    - id: int
+    - umbral: Float
+    - tipo_umbral: TipoUmbral
+    - activa: boolean
+    + evaluar_cumplimiento(valor: Float): boolean
+  }
+
+  class Metrica {
+    - id: int
+    - nombre: String
+    - unidad: String
+    + ultima_revision(proyecto: Proyecto): RevisionMetrica
+  }
+
+  class RevisionMetrica {
+    - id: int
+    - valor: Float
+    - fecha: Date
+    - cumple: boolean
+  }
+}
+
+package "tecnicas.model" #E1F5EE {
+  class SeguimientoTecnica {
+    - id: int
+    - porcentaje_avance: Float
+    - activa: boolean
+    + pasos_pendientes(): List<SeguimientoPaso>
+    + esta_completada(): boolean
+  }
+
+  class SeguimientoPaso {
+    - id: int
+    - completado: boolean
+    + esta_completado(): boolean
+  }
+
+  class Evidencia {
+    - id: int
+    - fecha: Date
+    - fecha_registro: DateTime
+  }
+
+  class TecnicaQA {
+    - id: int
+    - nombre: String
+    - dimension: Dimension
+  }
+}
+
+Encargado --> ReporteProyectoTemplate : abre >
+ReporteProyectoTemplate ..> ReporteProyectoView : dispara solicitud >
+ReporteProyectoView ..> Proyecto : consulta >
+ReporteProyectoView ..> ResumenReporte : construye >
+Proyecto "1" -- "0..1" ModeloAplicado : aplica
+ModeloAplicado "1" -- "1..*" MetricaAplicada : incluye
+MetricaAplicada "*" -- "1" Metrica : instancia de
+Metrica "1" -- "0..*" RevisionMetrica : se mide en
+Proyecto "1" -- "0..*" SeguimientoTecnica : sigue
+SeguimientoTecnica "1" -- "1..*" SeguimientoPaso : desglosa
+SeguimientoPaso "1" -- "0..1" Evidencia : se respalda con
+SeguimientoTecnica "*" -- "1" TecnicaQA : aplica
+
+note right of ResumenReporte
+  Reporte de solo lectura: reune el estado
+  actual y no persiste nada.
+end note
+
+note bottom of ReporteProyectoView
+  Lo que necesita atencion va primero:
+  metricas que no cumplen (incluye sin
+  medicion) y tecnicas con pasos pendientes.
+  Si no hay datos, faltantes() indica que
+  configurar o registrar.
+end note
+
+note bottom of Proyecto
+  ultima_evidencia() recorre el accessor
+  inverso de tecnicas; reportes no importa
+  el modulo tecnicas.
+end note
+@enduml
