@@ -25,6 +25,7 @@ from .models import (
     registrar_salud,
     tendencia_salud,
 )
+from .utils import coincide
 
 
 class InicioView(View):
@@ -99,22 +100,44 @@ class ListaProyectosView(View):
 
     def listar_proyectos(self, periodo=None, busqueda=''):
         """Proyectos del periodo indicado, ordenados por fecha de inicio."""
-        consulta = Proyecto.objects.prefetch_related(
-            'equipo__persona', 'seguimientos_tecnicas'
-        )
         if busqueda:
-            consulta = consulta.filter(nombre__icontains=busqueda)
-        proyectos = list(consulta.order_by('-fecha_inicio', 'nombre'))
+            proyectos = self.buscar_proyectos(busqueda, periodo)
+        else:
+            proyectos = self.proyectos_ordenados()
+            if periodo is not None:
+                proyectos = [
+                    proyecto
+                    for proyecto in proyectos
+                    if proyecto.esta_en_periodo(periodo.nombre)
+                ]
         for proyecto in proyectos:
             proyecto.periodo_actual = proyecto.periodo()
             proyecto.salud_actual = proyecto.indice_salud()
-        if periodo is not None:
-            proyectos = [
-                proyecto
-                for proyecto in proyectos
-                if proyecto.esta_en_periodo(periodo.nombre)
-            ]
         return proyectos
+
+    def proyectos_ordenados(self):
+        """Todos los proyectos, del inicio más reciente al más antiguo."""
+        return list(
+            Proyecto.objects.prefetch_related(
+                'equipo__persona', 'seguimientos_tecnicas'
+            ).order_by('-fecha_inicio', 'nombre')
+        )
+
+    def buscar_proyectos(self, termino, periodo=None):
+        """Proyectos cuyo nombre coincide, dentro del periodo (HU-20).
+
+        La comparación ignora mayúsculas y acentos, así que «aplicacion»
+        encuentra «Aplicación Móvil».
+        """
+        return [
+            proyecto
+            for proyecto in self.proyectos_ordenados()
+            if coincide(proyecto.nombre, termino)
+            and (
+                periodo is None
+                or proyecto.esta_en_periodo(periodo.nombre)
+            )
+        ]
 
     def periodos_disponibles(self):
         """Los tres periodos, del más reciente al más antiguo."""

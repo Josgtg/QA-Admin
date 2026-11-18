@@ -1,0 +1,74 @@
+@startuml hu20_clases
+allowmixing
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam nodesep 70
+skinparam ranksep 95
+top to bottom direction
+
+title Clases: busqueda de proyectos por nombre (HU-20)
+
+actor "Encargado de calidad" as Encargado
+
+package "reportes.template" #FAEEDA {
+  class ListaProyectosTemplate
+}
+
+package "reportes.view" #FAEEDA {
+  class ListaProyectosView {
+    + get(request: HttpRequest): HttpResponse
+    + listar_proyectos(periodo: Periodo, busqueda: String): List<Proyecto>
+    + buscar_proyectos(termino: String, periodo: Periodo): List<Proyecto>
+    + agrupar_por_periodo(proyectos: List<Proyecto>, periodos: List<Periodo>): List
+    + sin_resultados(proyectos: List<Proyecto>): boolean
+  }
+}
+
+package "reportes.model" #FAEEDA {
+  class Proyecto {
+    - id: int
+    - nombre: String
+    - fecha_inicio: Date
+    - fecha_fin: Date
+    + periodo(): String
+    + esta_en_periodo(periodo: String): boolean
+  }
+
+  class Periodo <<derivado>> {
+    - nombre: String
+    + obtener_proyectos(): List<Proyecto>
+  }
+}
+
+package "reportes.utils" #F4F4F5 {
+  class Busqueda <<utility>> {
+    + normalizar_texto(texto: String): String
+    + coincide(nombre: String, termino: String): boolean
+  }
+}
+
+Encargado --> ListaProyectosTemplate : escribe el nombre >
+ListaProyectosTemplate ..> ListaProyectosView : dispara solicitud >
+ListaProyectosView ..> Busqueda : normaliza y compara >
+ListaProyectosView ..> Proyecto : filtra >
+Periodo "1" -- "0..*" Proyecto : agrupa
+
+note right of Busqueda
+  normalizar_texto() pasa a minusculas y
+  quita acentos (unicodedata), para que
+  «aplicacion» encuentre «Aplicacion Movil».
+end note
+
+note bottom of ListaProyectosView
+  La busqueda se hace dentro del periodo
+  elegido; al borrar el termino vuelven a
+  verse todos los proyectos.
+end note
+
+note bottom of ListaProyectosTemplate
+  Sin coincidencias se muestra «Sin resultados»
+  y una accion para quitar la busqueda.
+end note
+@enduml

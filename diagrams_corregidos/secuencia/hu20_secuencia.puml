@@ -1,0 +1,65 @@
+@startuml hu20_secuencia
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de calidad" as Encargado
+
+box "Template Layer"
+participant "ListaProyectosTemplate" as UI
+end box
+
+box "View Layer (reportes.view)"
+participant "ListaProyectosView" as View
+end box
+
+box "Utils (reportes.utils)"
+participant "b: Busqueda" as Busqueda
+end box
+
+== Buscar proyectos por nombre (HU-20) ==
+
+Encargado -> UI: Escribe «aplicacion» en el buscador
+UI -> View: get(request) con q='aplicacion' y periodo='activo'
+activate View
+
+View -> View: leer_parametros(request)
+
+View -> Busqueda: normalizar_texto('aplicacion')
+activate Busqueda
+Busqueda --> View: 'aplicacion'
+deactivate Busqueda
+
+View -> View: buscar_proyectos('aplicacion', periodo)
+
+loop "por cada proyecto"
+    View -> Busqueda: coincide(nombre, 'aplicacion')
+    activate Busqueda
+    Busqueda --> View: boolean
+    deactivate Busqueda
+end
+
+View -> View: agrupar_por_periodo(proyectos, periodos)
+
+View --> UI: HttpResponse (200 OK)
+deactivate View
+
+alt "hay coincidencias"
+    UI --> Encargado: Muestra los proyectos que coinciden dentro del periodo
+else "sin coincidencias"
+    UI --> Encargado: «Sin resultados» y accion para quitar la busqueda
+end
+
+== Quitar la busqueda (HU-20) ==
+
+Encargado -> UI: Borra el termino del buscador
+UI -> View: get(request) sin q
+activate View
+
+View -> View: listar_proyectos(periodo, '')
+
+View --> UI: HttpResponse (200 OK)
+deactivate View
+
+UI --> Encargado: Vuelven a verse todos los proyectos del periodo
+
+@enduml
