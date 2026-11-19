@@ -86,6 +86,23 @@ Rutas disponibles:
 La migración `tecnicas.0004_tecnicas_ejemplo` carga un catálogo base con dos
 técnicas de ejemplo: Revisión de código y Revisión de requisitos.
 
+## Datos de demostración
+
+Para probar la aplicación con información realista:
+
+```bash
+python manage.py seed_demo
+```
+
+Crea cuatro proyectos con estados distintos (activo saludable, activo en
+progreso, futuro y terminado), cada uno con su modelo de calidad, métricas,
+técnicas y evidencias. El comando no duplica datos: si los proyectos ya
+existen, avisa y termina. Para borrarlos y volver a crearlos:
+
+```bash
+python manage.py seed_demo --reset
+```
+
 ## Flujo de trabajo con Git
 
 - `main`: versión estable.
