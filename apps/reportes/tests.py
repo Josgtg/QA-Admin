@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import formats, timezone
 
 from apps.tecnicas.models import SeguimientoTecnica, TecnicaQA
 from apps.tecnicas.selection import SESSION_KEY
@@ -1344,7 +1344,8 @@ class TendenciaHU14Tests(TestCase):
         self.registro(1, 70.0)
         respuesta = self.client.get(self.url)
         fecha = (self.hoy - timedelta(days=1)).strftime('%d/%m/%Y')
-        self.assertContains(respuesta, f'<title>{fecha}: 70.0</title>')
+        valor = formats.localize(70.0)
+        self.assertContains(respuesta, f'<title>{fecha}: {valor}</title>')
 
     def test_grafica_muestra_mas_de_seis_registros(self):
         for dias in range(1, 10):

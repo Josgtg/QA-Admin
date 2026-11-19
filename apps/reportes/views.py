@@ -7,13 +7,19 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
+from apps.modelos.models import EstadoMetrica
 from apps.tecnicas.selection import (
     SESSION_KEY,
     obtener_proyecto_seleccionado,
     seleccionar_proyecto,
 )
 
-from .forms import MiembroProyectoFormSet, ProyectoForm, RangoFechasForm
+from .forms import (
+    FiltroMetricasForm,
+    MiembroProyectoFormSet,
+    ProyectoForm,
+    RangoFechasForm,
+)
 from .models import (
     MiembroProyecto,
     Periodo,
@@ -364,20 +370,23 @@ class EliminarProyectoView(View):
 
 
 def resumen_metricas(proyecto, aplicado):
-    """Filas de métricas aplicadas con su último valor y estado."""
+    """Filas de métricas aplicadas con su valor, estado e importancia."""
     if aplicado is None:
         return []
     filas = []
     for instantanea in aplicado.metricas_aplicadas():
         metrica = instantanea.metrica
         ultima = metrica.ultima_revision(proyecto)
+        estado = instantanea.estado(ultima)
         filas.append(
             {
                 'instantanea': instantanea,
                 'metrica': metrica,
                 'ultima': ultima,
                 'valor': ultima.valor if ultima is not None else None,
-                'aceptada': metrica.esta_aceptada(proyecto),
+                'estado': estado,
+                'aceptada': estado == EstadoMetrica.CUMPLE,
+                'importancia': metrica.obtener_importancia(),
                 'revisiones': list(metrica.revisiones(proyecto)[:10]),
             }
         )
@@ -392,15 +401,51 @@ class MetricasProyectoView(View):
         seleccionar_proyecto(request, proyecto)
         aplicado = proyecto.modelo_aplicado_vigente()
 
+        filtro_form = FiltroMetricasForm(request.GET or None)
+        filtro_form.is_valid()
+        filtros = filtro_form.valores()
+        filas = self.listar_filas(proyecto, aplicado)
+        metricas = self.aplicar_filtros(
+            filas,
+            filtros['conformidad'],
+            filtros['importancia'],
+        )
+
         return render(
             request,
             self.template_name,
             {
                 'proyecto': proyecto,
                 'aplicado': aplicado,
-                'metricas': resumen_metricas(proyecto, aplicado),
+                'metricas': metricas,
+                'total_metricas': len(filas),
+                'filtro_form': filtro_form,
+                'hay_filtros': filtro_form.esta_activo(),
+                'avisos': filtro_form.avisos,
             },
         )
+
+    def listar_filas(self, proyecto, aplicado):
+        """Todas las filas del modelo vigente, antes de filtrar."""
+        return resumen_metricas(proyecto, aplicado)
+
+    def filtrar_por_conformidad(self, filas, estado):
+        """Conserva las filas cuyo estado calculado coincide con ``estado``."""
+        return [fila for fila in filas if fila['estado'] == estado]
+
+    def filtrar_por_importancia(self, filas, importancia):
+        """Conserva las filas cuya importancia coincide con ``importancia``."""
+        return [
+            fila for fila in filas if fila['importancia'] == importancia
+        ]
+
+    def aplicar_filtros(self, filas, conformidad=None, importancia=None):
+        """Aplica ambos criterios en conjunto (AND); ``None`` no restringe."""
+        if conformidad is not None:
+            filas = self.filtrar_por_conformidad(filas, conformidad)
+        if importancia is not None:
+            filas = self.filtrar_por_importancia(filas, importancia)
+        return filas
 
 
 class TableroProyectoView(View):

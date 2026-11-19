@@ -51,10 +51,16 @@
 </section>
 {% else %}
 
+{% include 'reportes/_filtros_metricas.html' %}
+
 <div class="card-head metric-cards-head">
     <h3>Métricas del modelo vigente</h3>
     <span class="head-muted">
+        {% if hay_filtros %}
+        {{ metricas|length }} de {{ total_metricas }} métrica{{ total_metricas|pluralize:"s" }}
+        {% else %}
         {{ metricas|length }} métrica{{ metricas|length|pluralize:"s" }}
+        {% endif %}
     </span>
 </div>
 
@@ -66,15 +72,16 @@
             <div>
                 <h3>{{ fila.metrica.nombre }}</h3>
                 <div class="cell-sub metric-card-sub">
-                    {{ fila.metrica.caracteristica.nombre }} · {{ fila.metrica.unidad }}
+                    {{ fila.metrica.caracteristica.nombre }} · {{ fila.metrica.unidad }} ·
+                    Importancia {{ fila.importancia.label|lower }}
                 </div>
             </div>
-            {% if fila.valor is None %}
-            <span class="status gray">Sin medición</span>
-            {% elif fila.aceptada %}
+            {% if fila.estado == 'CUMPLE' %}
             <span class="status green">Cumple</span>
-            {% else %}
+            {% elif fila.estado == 'NO_CUMPLE' %}
             <span class="status red">No cumple</span>
+            {% else %}
+            <span class="status gray">Sin medición</span>
             {% endif %}
         </div>
 
@@ -117,9 +124,23 @@
     {% endfor %}
 </div>
 {% else %}
+{% if hay_filtros %}
+<section class="card empty-state">
+    <svg class="icon empty-icon"><use href="#i-filter"></use></svg>
+    <h3>Sin resultados</h3>
+    <p>
+        Ninguna métrica del modelo vigente coincide con los filtros
+        aplicados.
+    </p>
+    <div class="detail-actions">
+        <a class="btn btn-outline" href="{{ request.path }}">Quitar filtros</a>
+    </div>
+</section>
+{% else %}
 <section class="card">
     <div class="empty-row">Este modelo no tiene métricas configuradas.</div>
 </section>
+{% endif %}
 {% endif %}
 {% endif %}
 {% endblock %}

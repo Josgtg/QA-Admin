@@ -1,0 +1,34 @@
+{% comment %}
+Barra de filtros de la pantalla de métricas (HU-15).
+
+Pinta los selects de conformidad e importancia, conserva la selección que
+llega por query string y muestra un aviso por cada valor descartado. No
+escribe en la base de datos: envía un GET a la misma URL.
+{% endcomment %}
+<form method="get" class="filter-row" action="{{ request.path }}"
+      aria-label="Filtros de métricas">
+    <label class="filter-label" for="{{ filtro_form.conformidad.id_for_label }}">
+        Conformidad
+    </label>
+    {{ filtro_form.conformidad }}
+
+    <label class="filter-label" for="{{ filtro_form.importancia.id_for_label }}">
+        Importancia
+    </label>
+    {{ filtro_form.importancia }}
+
+    <button class="btn btn-primary btn-sm" type="submit">
+        <svg class="icon icon-sm"><use href="#i-filter"></use></svg>
+        Filtrar
+    </button>
+    {% if hay_filtros %}
+    <a class="btn btn-outline btn-sm" href="{{ request.path }}">Limpiar</a>
+    {% endif %}
+</form>
+
+{% for aviso in avisos %}
+<div class="notice notice-warning">
+    <svg class="icon"><use href="#i-alert-circle"></use></svg>
+    <p>{{ aviso }}</p>
+</div>
+{% endfor %}
