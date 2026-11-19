@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 
@@ -45,6 +45,23 @@ class ModeloCalidad(models.Model):
         return cls.objects.filter(
             models.Q(predefinido=True) | models.Q(modelo_metricas__activa=True)
         ).distinct()
+
+    @transaction.atomic
+    def guardar_con_metricas(self, filas):
+        """Guarda el modelo y las métricas validadas en una única transacción."""
+        self.save()
+        for fila in filter(None, filas):
+            caracteristica, _ = Caracteristica.objects.get_or_create(
+                nombre=fila['caracteristica']
+            )
+            metrica = Metrica.objects.create(
+                caracteristica=caracteristica, nombre=fila['nombre'],
+                forma_medicion=fila['forma_medicion'], unidad=fila['unidad'],
+            )
+            ModeloMetrica.objects.create(
+                modelo_calidad=self, metrica=metrica, umbral=fila['meta'],
+                tipo_umbral=fila['tipo_umbral'],
+            )
 
     def obtener_modelo_metricas(self):
         return self.modelo_metricas.select_related(

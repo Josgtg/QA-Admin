@@ -1,22 +1,29 @@
 @startuml
-title HU-17 · Alta y selección de una técnica propia
+title HU-17 · Alta, catálogo, selección y protección
 actor Encargado
-participant Catálogo
-participant "Formulario de técnica" as Alta
-database "Base de datos" as BD
-participant "Selección de técnicas" as Seleccion
-Encargado -> Alta : Enviar nombre, dimensión, tipo, descripción y pasos
-Alta -> Alta : Validar campos y al menos un paso con instrucción y evidencia esperada
-alt Datos incompletos
-  Alta --> Encargado : Mostrar errores y conservar captura
+participant GestionTecnicaPropiaView as Gestion
+participant DatosTecnica as Datos
+participant TecnicaQA as Tecnica
+participant CatalogoTecnicasView as Catalogo
+participant SeguirTecnicaView as Seleccion
+Encargado -> Gestion : crear(datos)
+Gestion -> Datos : validar()
+Datos --> Gestion : lista de errores (vacía si es válido)
+alt Campos incompletos, sin pasos o sin evidencia esperada
+  Gestion --> Encargado : formulario con errores y datos capturados
 else Datos válidos
-  Alta -> BD : Guardar técnica propia y pasos ordenados en una transacción
-  Alta -> Catálogo : Volver al catálogo
-  Catálogo --> Encargado : Mostrar técnica con etiqueta Propia
-  Encargado -> Seleccion : Elegir técnica para un proyecto
-  Seleccion -> BD : Registrar seguimiento del proyecto y sus pasos
+  Gestion -> Datos : guardar()
+  Datos --> Gestion : técnica propia con pasos ordenados
+  Gestion --> Encargado : redirección al catálogo
+  Encargado -> Catalogo : listar_tecnicas()
+  Catalogo --> Encargado : colección de técnicas; mostrar Propia cuando es_base es falso
+  Encargado -> Seleccion : seguir_tecnica(request, proyecto)
+  Seleccion --> Encargado : redirección al proyecto con seguimiento y pasos inicializados
 end
-Encargado -> Catálogo : Solicitar edición o borrado de una técnica base
-Catálogo -> BD : Consultar origen de la técnica
-Catálogo --> Encargado : Rechazar el cambio
+group Intento de editar o borrar una técnica base
+  Encargado -> Gestion : modificar(tecnica, accion)
+  Gestion -> Tecnica : permite_cambios()
+  Tecnica --> Gestion : falso
+  Gestion --> Encargado : acceso denegado; técnica y pasos intactos
+end
 @enduml
