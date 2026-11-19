@@ -42,6 +42,7 @@ class ModeloCalidad(models.Model):
 
     @classmethod
     def disponibles(cls):
+        """Incluye modelos base y modelos con métricas activas."""
         return cls.objects.filter(
             models.Q(predefinido=True) | models.Q(modelo_metricas__activa=True)
         ).distinct()
