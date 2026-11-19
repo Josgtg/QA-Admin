@@ -12,10 +12,18 @@ from .models import (
 
 admin.site.register(ModeloCalidad)
 admin.site.register(Caracteristica)
-admin.site.register(Metrica)
 admin.site.register(ModeloMetrica)
 admin.site.register(ModeloAplicado)
 admin.site.register(RevisionMetrica)
+
+
+@admin.register(Metrica)
+class MetricaAdmin(admin.ModelAdmin):
+    """Catálogo de métricas; la importancia se consulta desde HU-15."""
+
+    list_display = ('nombre', 'caracteristica', 'unidad', 'importancia')
+    list_filter = ('importancia', 'caracteristica')
+    search_fields = ('nombre', 'caracteristica__nombre')
 
 
 @admin.register(MetricaAplicada)

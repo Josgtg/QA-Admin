@@ -15,6 +15,27 @@ class TipoUmbral(models.TextChoices):
     MAXIMO = 'MAXIMO', 'Máximo'
 
 
+class Importancia(models.TextChoices):
+    """Nivel de importancia de una métrica en el catálogo (HU-15)."""
+
+    ALTA = 'ALTA', 'Alta'
+    MEDIA = 'MEDIA', 'Media'
+    BAJA = 'BAJA', 'Baja'
+
+
+class EstadoMetrica(models.TextChoices):
+    """Estado de conformidad calculado al consultar un proyecto (HU-15).
+
+    No se persiste: ``SIN_MEDICION`` permite distinguir una métrica que aún
+    no tiene revisiones de una que se midió y no cumple. La conformidad real
+    se calcula comparando el último valor con el umbral de la instantánea.
+    """
+
+    CUMPLE = 'CUMPLE', 'Cumple'
+    NO_CUMPLE = 'NO_CUMPLE', 'No cumple'
+    SIN_MEDICION = 'SIN_MEDICION', 'Sin medición'
+
+
 class ModeloCalidad(models.Model):
     """Catálogo de modelos de calidad (``hu3_clases.puml``).
 
@@ -128,6 +149,13 @@ class Metrica(models.Model):
     unidad = models.CharField(max_length=50)
     valor_min = models.FloatField(null=True, blank=True)
     valor_max = models.FloatField(null=True, blank=True)
+    importancia = models.CharField(
+        max_length=10,
+        choices=Importancia.choices,
+        default=Importancia.MEDIA,
+        verbose_name='importancia',
+        help_text='Nivel con el que se clasifica la métrica (HU-15).',
+    )
 
     class Meta:
         verbose_name = 'métrica'
@@ -211,6 +239,10 @@ class Metrica(models.Model):
         revision = self.ultima_revision(proyecto)
         return revision.valor if revision is not None else None
 
+    def obtener_importancia(self):
+        """Importancia del catálogo, como enum ``Importancia`` (HU-15)."""
+        return Importancia(self.importancia)
+
     def instantanea_vigente(self, proyecto):
         return MetricaAplicada.objects.filter(
             metrica=self,
@@ -219,14 +251,17 @@ class Metrica(models.Model):
         ).first()
 
     def esta_aceptada(self, proyecto):
-        """Reevalúa el último valor con el umbral de la instantánea vigente."""
+        """Reevalúa el último valor con el umbral de la instantánea vigente.
+
+        Delega en ``MetricaAplicada.estado()`` para no duplicar la regla que
+        distingue «sin medición» de «no cumple» (HU-15).
+        """
         instantanea = self.instantanea_vigente(proyecto)
         if instantanea is None:
             return False
-        valor = self.ultimo_valor(proyecto)
-        if valor is None:
-            return False
-        return instantanea.evaluar_cumplimiento(valor)
+        return instantanea.estado(self.ultima_revision(proyecto)) == (
+            EstadoMetrica.CUMPLE
+        )
 
 
 class ModeloMetrica(models.Model):
@@ -413,6 +448,20 @@ class MetricaAplicada(models.Model):
         if self.tipo_umbral == TipoUmbral.MINIMO:
             return valor >= self.umbral
         return valor <= self.umbral
+
+    def estado(self, ultima):
+        """Estado de conformidad de la instantánea para una revisión (HU-15).
+
+        ``ultima`` es la última ``RevisionMetrica`` de la métrica en el
+        proyecto, o ``None`` si todavía no hay mediciones. Con una revisión se
+        compara su valor contra el umbral de esta instantánea, de modo que una
+        métrica sin medir no se confunde con una que no cumple.
+        """
+        if ultima is None:
+            return EstadoMetrica.SIN_MEDICION
+        if self.evaluar_cumplimiento(ultima.valor):
+            return EstadoMetrica.CUMPLE
+        return EstadoMetrica.NO_CUMPLE
 
     def esta_activa(self):
         return self.activa

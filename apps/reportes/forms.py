@@ -1,7 +1,107 @@
 from django import forms
 from django.core.exceptions import ValidationError
 
+from apps.modelos.models import EstadoMetrica, Importancia
+
 from .models import Proyecto
+
+
+class FiltroMetricasForm(forms.Form):
+    """Filtros de métricas por conformidad e importancia (HU-15).
+
+    Los valores llegan por query string y se normalizan a los enums
+    ``EstadoMetrica`` e ``Importancia``. Un valor no reconocido no rompe la
+    pantalla: se descarta, se deja un aviso en ``avisos`` y el resto de los
+    criterios se sigue aplicando, igual que en el catálogo de HU-09.
+    """
+
+    MAPA_CONFORMIDAD = {
+        'cumple': EstadoMetrica.CUMPLE,
+        'no_cumple': EstadoMetrica.NO_CUMPLE,
+        'sin_medicion': EstadoMetrica.SIN_MEDICION,
+    }
+    MAPA_IMPORTANCIA = {
+        'alta': Importancia.ALTA,
+        'media': Importancia.MEDIA,
+        'baja': Importancia.BAJA,
+    }
+    OPCIONES_CONFORMIDAD = (
+        ('cumple', 'Cumple'),
+        ('no_cumple', 'No cumple'),
+        ('sin_medicion', 'Sin medición'),
+    )
+    OPCIONES_IMPORTANCIA = (
+        ('alta', 'Alta'),
+        ('media', 'Media'),
+        ('baja', 'Baja'),
+    )
+
+    conformidad = forms.CharField(
+        required=False,
+        widget=forms.Select(
+            attrs={'class': 'select-input filter-compact'}
+        ),
+    )
+    importancia = forms.CharField(
+        required=False,
+        widget=forms.Select(
+            attrs={'class': 'select-input filter-compact'}
+        ),
+    )
+
+    def __init__(self, data=None, **kwargs):
+        super().__init__(data=data, **kwargs)
+        self.fields['conformidad'].widget.choices = [
+            ('', 'Todas'),
+            *self.OPCIONES_CONFORMIDAD,
+        ]
+        self.fields['importancia'].widget.choices = [
+            ('', 'Todas'),
+            *self.OPCIONES_IMPORTANCIA,
+        ]
+        self.avisos = []
+
+    def clean(self):
+        datos = super().clean()
+        datos['conformidad'] = self._normalizar(
+            datos.get('conformidad'),
+            self.MAPA_CONFORMIDAD,
+            'El filtro de conformidad «{}» no es válido: se ignoró.',
+        )
+        datos['importancia'] = self._normalizar(
+            datos.get('importancia'),
+            self.MAPA_IMPORTANCIA,
+            'El filtro de importancia «{}» no es válido: se ignoró.',
+        )
+        return datos
+
+    def _normalizar(self, valor, mapa, plantilla_aviso):
+        """Convierte el texto de la URL al enum o devuelve ``None``."""
+        crudo = (valor or '').strip()
+        if not crudo:
+            return None
+        normalizado = mapa.get(crudo.lower())
+        if normalizado is None:
+            self.avisos.append(plantilla_aviso.format(crudo))
+        return normalizado
+
+    def esta_activo(self):
+        """Indica si al menos un filtro quedó seleccionado y válido."""
+        if not self.is_valid():
+            return False
+        return bool(
+            self.cleaned_data.get('conformidad')
+            or self.cleaned_data.get('importancia')
+        )
+
+    def valores(self):
+        """Valores normalizados listos para filtrar (``None`` = sin filtro)."""
+        if not self.is_valid():
+            return {'conformidad': None, 'importancia': None}
+        return {
+            'conformidad': self.cleaned_data.get('conformidad'),
+            'importancia': self.cleaned_data.get('importancia'),
+        }
 
 
 class RangoFechasForm(forms.Form):

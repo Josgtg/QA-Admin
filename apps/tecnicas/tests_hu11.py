@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from django.test import TestCase
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import formats, timezone
 
 from apps.reportes.models import MiembroProyecto, Persona, Proyecto
 
@@ -279,7 +279,8 @@ class EstadoTecnicaViewTests(TestCase):
 
         self.assertEqual(respuesta.context['estado'].porcentaje_avance, 0.0)
         self.assertContains(respuesta, 'Avance de la técnica')
-        self.assertContains(respuesta, '0.0% de avance')
+        avance = formats.localize(respuesta.context['estado'].porcentaje_avance)
+        self.assertContains(respuesta, f'{avance}% de avance')
 
     def test_cada_paso_completado_da_acceso_a_su_evidencia(self):
         self._completar(
