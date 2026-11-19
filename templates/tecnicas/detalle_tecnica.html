@@ -13,12 +13,31 @@
         <p class="subtitle">
             {{ tecnica.get_dimension_display }} ·
             {{ tecnica.get_tipo_control_display }}
+            {% if tecnica.es_propia %}
+            · <span class="status blue">Propia</span>
+            {% else %}
+            · Técnica base
+            {% endif %}
             {% if tecnica.es_placeholder %}
             · <span class="status gray">Contenido pendiente de definir</span>
             {% endif %}
         </p>
     </div>
     <div class="actions">
+        {% if tecnica.puede_modificarse %}
+        <a class="btn btn-outline" href="{% url 'tecnicas:editar' tecnica.pk %}">
+            <svg class="icon icon-sm"><use href="#i-pencil"></use></svg>
+            Editar
+        </a>
+        <form method="post" action="{% url 'tecnicas:eliminar' tecnica.pk %}"
+              onsubmit="return confirm('¿Eliminar la técnica «{{ tecnica.nombre|escapejs }}»?{% if tecnica.seguimientos.exists %} También se quitará de los proyectos que la siguen.{% endif %}');">
+            {% csrf_token %}
+            <button class="btn btn-danger" type="submit">
+                <svg class="icon icon-sm"><use href="#i-trash"></use></svg>
+                Eliminar
+            </button>
+        </form>
+        {% endif %}
         <a class="btn btn-outline" href="{% url 'tecnicas:seguimiento' %}">
             <svg class="icon icon-sm"><use href="#i-list-check"></use></svg>
             Seguimiento
@@ -26,16 +45,28 @@
     </div>
 </div>
 
+{% if messages %}
+<div class="flash-stack">
+    {% for message in messages %}
+    <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if not tecnica.puede_modificarse and not messages %}
+<p class="muted">{{ tecnica.motivo_para_no_modificar }}</p>
+{% endif %}
+
 <div class="detail-grid">
     <section class="card">
         <div class="card-head">
             <h3>Objetivo</h3>
         </div>
-        <p>{{ tecnica.objetivo }}</p>
+        <p>{{ tecnica.objetivo|default:"Sin definir" }}</p>
         <div class="card-head section-gap">
             <h3>Pregunta clave</h3>
         </div>
-        <p>{{ tecnica.pregunta_clave }}</p>
+        <p>{{ tecnica.pregunta_clave|default:"Sin definir" }}</p>
     </section>
 
     <section class="card">

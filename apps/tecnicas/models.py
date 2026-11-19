@@ -70,6 +70,50 @@ class TecnicaQA(models.Model):
         """Contenido provisional mientras no exista el texto definitivo."""
         return self.descripcion.startswith('[PENDIENTE]')
 
+    def es_base(self):
+        """True si pertenece al catálogo base; esas no se editan ni se borran."""
+        return self.catalogo_id is not None
+
+    def es_propia(self):
+        """True si la creó el encargado: no pertenece a ningún catálogo (HU-17)."""
+        return not self.es_base()
+
+    def proyectos_con_evidencias(self):
+        """Proyectos donde algún paso de la técnica ya tiene evidencia."""
+        from apps.reportes.models import Proyecto
+
+        return Proyecto.objects.filter(
+            seguimientos_tecnicas__tecnica=self,
+            seguimientos_tecnicas__pasos__evidencia__isnull=False,
+        ).distinct()
+
+    def motivo_para_no_modificar(self):
+        """Explica por qué la técnica no se puede editar ni borrar.
+
+        Devuelve una cadena vacía cuando sí se puede.
+        """
+        if self.es_base():
+            return 'Las técnicas base no se pueden editar ni borrar.'
+        nombres = list(
+            self.proyectos_con_evidencias().values_list('nombre', flat=True)
+        )
+        if nombres:
+            return (
+                f'La técnica ya tiene evidencias en: {", ".join(nombres)}. '
+                'No se puede editar ni borrar para conservarlas.'
+            )
+        return ''
+
+    def puede_modificarse(self):
+        """True si es propia y aún no tiene evidencias registradas."""
+        return not self.motivo_para_no_modificar()
+
+    def validar_modificable(self):
+        """Lanza ValidationError si la técnica no se puede modificar."""
+        motivo = self.motivo_para_no_modificar()
+        if motivo:
+            raise ValidationError(motivo)
+
 
 class Paso(models.Model):
     tecnica = models.ForeignKey(

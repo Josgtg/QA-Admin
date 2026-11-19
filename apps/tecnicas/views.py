@@ -19,9 +19,14 @@ from apps.tecnicas.selection import (
     seleccionar_proyecto,
 )
 
-from .forms import EvidenciaForm
+from .forms import EvidenciaForm, PasoFormSet, TecnicaPropiaForm
 from .models import Evidencia, SeguimientoPaso
-from .services import aplicar_seleccion, dimensiones_sin_tecnicas
+from .services import (
+    aplicar_seleccion,
+    dimensiones_sin_tecnicas,
+    eliminar_tecnica_propia,
+    guardar_tecnica_propia,
+)
 
 DIMENSION_META = {
     Dimension.ESPECIFICACION.value: {'color': 'blue', 'icon': 'i-file'},
@@ -437,3 +442,103 @@ class AbrirEvidenciaView(View):
             ),
             pk=evidencia_id,
         )
+
+
+class CrearTecnicaView(View):
+    """Registra una técnica propia con sus pasos (HU-17)."""
+
+    template_name = 'tecnicas/tecnica_form.html'
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        return self.renderizar(
+            request, TecnicaPropiaForm(), PasoFormSet(prefix='pasos')
+        )
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        form = TecnicaPropiaForm(request.POST)
+        pasos = PasoFormSet(request.POST, prefix='pasos')
+        datos_validos = form.is_valid()
+        pasos_validos = pasos.is_valid()
+        if not (datos_validos and pasos_validos):
+            return self.renderizar(request, form, pasos)
+
+        tecnica = guardar_tecnica_propia(form.save(commit=False), pasos.pasos())
+        messages.success(
+            request,
+            f'Técnica «{tecnica.nombre}» creada. Ya aparece en el catálogo '
+            'como propia.',
+        )
+        return redirect('tecnicas:detalle', tecnica_id=tecnica.pk)
+
+    def renderizar(self, request, form, pasos, tecnica=None):
+        """Muestra el formulario de la técnica con sus pasos."""
+        return render(
+            request,
+            self.template_name,
+            {'form': form, 'pasos': pasos, 'tecnica': tecnica},
+        )
+
+
+class EditarTecnicaView(CrearTecnicaView):
+    """Edita una técnica propia sin evidencias (HU-17).
+
+    Las técnicas base y las propias con evidencias no se editan.
+    """
+
+    def get(self, request: HttpRequest, tecnica_id: int) -> HttpResponse:
+        tecnica = get_object_or_404(TecnicaQA, pk=tecnica_id)
+        if not tecnica.puede_modificarse():
+            return self.rechazar(request, tecnica)
+        pasos = PasoFormSet(
+            prefix='pasos',
+            initial=[
+                {
+                    'instruccion': paso.instruccion,
+                    'evidencia_esperada': paso.evidencia_esperada,
+                }
+                for paso in tecnica.obtener_pasos()
+            ],
+        )
+        return self.renderizar(
+            request, TecnicaPropiaForm(instance=tecnica), pasos, tecnica
+        )
+
+    def post(self, request: HttpRequest, tecnica_id: int) -> HttpResponse:
+        tecnica = get_object_or_404(TecnicaQA, pk=tecnica_id)
+        if not tecnica.puede_modificarse():
+            return self.rechazar(request, tecnica)
+
+        form = TecnicaPropiaForm(request.POST, instance=tecnica)
+        pasos = PasoFormSet(request.POST, prefix='pasos')
+        datos_validos = form.is_valid()
+        pasos_validos = pasos.is_valid()
+        if not (datos_validos and pasos_validos):
+            return self.renderizar(request, form, pasos, tecnica)
+
+        try:
+            guardar_tecnica_propia(form.save(commit=False), pasos.pasos())
+        except ValidationError as error:
+            messages.error(request, ' '.join(error.messages))
+            return redirect('tecnicas:detalle', tecnica_id=tecnica.pk)
+        messages.success(request, f'Técnica «{tecnica.nombre}» actualizada.')
+        return redirect('tecnicas:detalle', tecnica_id=tecnica.pk)
+
+    def rechazar(self, request, tecnica):
+        """Vuelve al detalle explicando por qué no se puede editar."""
+        messages.error(request, tecnica.motivo_para_no_modificar())
+        return redirect('tecnicas:detalle', tecnica_id=tecnica.pk)
+
+
+class EliminarTecnicaView(View):
+    """Borra una técnica propia sin evidencias (HU-17). Solo acepta POST."""
+
+    def post(self, request: HttpRequest, tecnica_id: int) -> HttpResponse:
+        tecnica = get_object_or_404(TecnicaQA, pk=tecnica_id)
+        nombre = tecnica.nombre
+        try:
+            eliminar_tecnica_propia(tecnica)
+        except ValidationError as error:
+            messages.error(request, ' '.join(error.messages))
+            return redirect('tecnicas:detalle', tecnica_id=tecnica.pk)
+        messages.success(request, f'Técnica «{nombre}» eliminada.')
+        return redirect('tecnicas:catalogo')

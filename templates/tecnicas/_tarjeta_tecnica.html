@@ -14,6 +14,9 @@ Tarjeta del catálogo de técnicas (HU-04), con checkbox de selección (H4-4=b).
             </h3>
             <p class="model-description">{{ tecnica.descripcion }}</p>
         </div>
+        {% if tecnica.es_propia %}
+        <span class="status blue">Propia</span>
+        {% endif %}
         {% if tecnica.es_placeholder %}
         <span class="status gray">Por definir</span>
         {% endif %}

@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if tecnica %}Editar técnica · {{ tecnica.nombre }}{% else %}Nueva técnica{% endif %} · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        {% if tecnica %}
+        <a class="back-link" href="{% url 'tecnicas:detalle' tecnica.pk %}">
+            <svg class="icon icon-xs"><use href="#i-arrow-left"></use></svg>
+            Volver a la técnica
+        </a>
+        <h2>Editar técnica propia</h2>
+        {% else %}
+        <a class="back-link" href="{% url 'tecnicas:catalogo' %}">
+            <svg class="icon icon-xs"><use href="#i-arrow-left"></use></svg>
+            Volver al catálogo
+        </a>
+        <h2>Nueva técnica propia</h2>
+        {% endif %}
+        <p class="subtitle">
+            Define la técnica y sus pasos. Cada paso indica qué evidencia se espera.
+        </p>
+    </div>
+</div>
+
+<section class="card project-form-card">
+    <form method="post" class="tecnica-form" novalidate>
+        {% csrf_token %}
+
+        <div class="form-card-head">
+            <span class="form-card-icon">
+                <svg class="icon"><use href="#i-techniques"></use></svg>
+            </span>
+            <div>
+                <h3>Datos de la técnica</h3>
+                <p>Los campos con * son obligatorios.</p>
+            </div>
+        </div>
+
+        <div class="form-grid">
+            {% for campo in form %}
+            <div class="field{% if campo.name != 'dimension' and campo.name != 'tipo_control' %} field-wide{% endif %}">
+                <label for="{{ campo.id_for_label }}">
+                    {{ campo.label }}{% if campo.field.required %} <span class="field-required">*</span>{% endif %}
+                </label>
+                {{ campo }}
+                {% if campo.errors %}
+                <div class="field-error">{{ campo.errors|striptags }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="form-card-head section-gap">
+            <span class="form-card-icon">
+                <svg class="icon"><use href="#i-list-check"></use></svg>
+            </span>
+            <div>
+                <h3>Pasos <span class="field-required">*</span></h3>
+                <p>Agrega al menos un paso. Una fila vacía no se guarda.</p>
+            </div>
+        </div>
+
+        {{ pasos.management_form }}
+        {% if pasos.non_form_errors %}
+        <div class="flash flash-error">{{ pasos.non_form_errors|striptags }}</div>
+        {% endif %}
+
+        <div id="pasos-lista">
+            {% for paso in pasos %}
+            <div class="form-row paso-row">
+                <span class="paso-numero">{{ forloop.counter }}</span>
+                <div class="form-field field-paso">
+                    <label for="{{ paso.instruccion.id_for_label }}">{{ paso.instruccion.label }}</label>
+                    {{ paso.instruccion }}
+                    {% if paso.instruccion.errors %}
+                    <div class="field-error">{{ paso.instruccion.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+                <div class="form-field field-paso">
+                    <label for="{{ paso.evidencia_esperada.id_for_label }}">{{ paso.evidencia_esperada.label }}</label>
+                    {{ paso.evidencia_esperada }}
+                    {% if paso.evidencia_esperada.errors %}
+                    <div class="field-error">{{ paso.evidencia_esperada.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <template id="paso-vacio">
+            <div class="form-row paso-row">
+                <span class="paso-numero"></span>
+                <div class="form-field field-paso">
+                    <label for="{{ pasos.empty_form.instruccion.id_for_label }}">{{ pasos.empty_form.instruccion.label }}</label>
+                    {{ pasos.empty_form.instruccion }}
+                </div>
+                <div class="form-field field-paso">
+                    <label for="{{ pasos.empty_form.evidencia_esperada.id_for_label }}">{{ pasos.empty_form.evidencia_esperada.label }}</label>
+                    {{ pasos.empty_form.evidencia_esperada }}
+                </div>
+            </div>
+        </template>
+
+        <button class="btn btn-outline btn-sm" type="button" id="agregar-paso">
+            <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+            Agregar paso
+        </button>
+
+        <div class="form-actions">
+            {% if tecnica %}
+            <a class="btn" href="{% url 'tecnicas:detalle' tecnica.pk %}">Cancelar</a>
+            {% else %}
+            <a class="btn" href="{% url 'tecnicas:catalogo' %}">Cancelar</a>
+            {% endif %}
+            <button class="btn btn-primary" type="submit">
+                <svg class="icon icon-sm"><use href="#i-check-circle"></use></svg>
+                Guardar técnica
+            </button>
+        </div>
+    </form>
+</section>
+
+<script>
+(function () {
+    const lista = document.getElementById('pasos-lista');
+    const molde = document.getElementById('paso-vacio');
+    const boton = document.getElementById('agregar-paso');
+    const total = document.getElementById('id_pasos-TOTAL_FORMS');
+
+    if (!lista || !molde || !boton || !total) {
+        return;
+    }
+
+    boton.addEventListener('click', function () {
+        const indice = Number(total.value);
+        const html = molde.innerHTML.replace(/__prefix__/g, indice);
+        lista.insertAdjacentHTML('beforeend', html);
+        total.value = indice + 1;
+        const fila = lista.lastElementChild;
+        fila.querySelector('.paso-numero').textContent = indice + 1;
+        fila.querySelector('textarea').focus();
+    });
+})();
+</script>
+{% endblock %}

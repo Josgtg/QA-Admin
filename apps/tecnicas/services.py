@@ -6,7 +6,7 @@ hagan exactamente lo mismo al aplicar una selección (H4-4=b).
 
 from django.db import transaction
 
-from .models import SeguimientoPaso, SeguimientoTecnica, TecnicaQA
+from .models import Paso, SeguimientoPaso, SeguimientoTecnica, TecnicaQA
 
 
 @transaction.atomic
@@ -65,3 +65,46 @@ def dimensiones_sin_tecnicas(proyecto):
         for valor, etiqueta in Dimension.choices
         if valor not in activas
     ]
+
+
+@transaction.atomic
+def guardar_tecnica_propia(tecnica, pasos):
+    """Guarda una técnica propia con exactamente los pasos indicados (HU-17).
+
+    ``pasos`` es una lista ordenada de pares (instrucción, evidencia esperada).
+    Al editar, los pasos anteriores se reemplazan y los proyectos que ya siguen
+    la técnica reciben los pasos nuevos. Solo se permite mientras la técnica no
+    tenga evidencias, para no perderlas; por eso su avance sigue en 0.
+    """
+    if tecnica.pk:
+        TecnicaQA.objects.select_for_update().get(pk=tecnica.pk)
+        tecnica.validar_modificable()
+    tecnica.save()
+
+    seguimientos = list(tecnica.seguimientos.all())
+    SeguimientoPaso.objects.filter(seguimiento__in=seguimientos).delete()
+    tecnica.pasos.all().delete()
+    Paso.objects.bulk_create(
+        Paso(
+            tecnica=tecnica,
+            orden=orden,
+            instruccion=instruccion,
+            evidencia_esperada=evidencia,
+        )
+        for orden, (instruccion, evidencia) in enumerate(pasos, start=1)
+    )
+    for seguimiento in seguimientos:
+        SeguimientoPaso.objects.bulk_create(
+            SeguimientoPaso(seguimiento=seguimiento, paso=paso)
+            for paso in tecnica.obtener_pasos()
+        )
+    return tecnica
+
+
+@transaction.atomic
+def eliminar_tecnica_propia(tecnica):
+    """Borra una técnica propia sin evidencias y la quita de los proyectos."""
+    TecnicaQA.objects.select_for_update().get(pk=tecnica.pk)
+    tecnica.validar_modificable()
+    tecnica.seguimientos.all().delete()
+    tecnica.delete()

@@ -2527,3 +2527,38 @@ table.data {
         grid-template-columns: 1fr;
     }
 }
+
+.paso-row {
+    align-items: flex-start;
+}
+
+.paso-numero {
+    flex: 0 0 22px;
+    padding-top: 22px;
+    color: var(--soft);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: right;
+}
+
+.form-row .form-field.field-paso {
+    flex: 1 1 0;
+}
+
+.form-row .form-field.field-paso textarea {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+}
+
+.tecnica-form textarea {
+    font-family: inherit;
+}
+
+#agregar-paso {
+    margin-top: 10px;
+}
+
+.actions form {
+    margin: 0;
+}

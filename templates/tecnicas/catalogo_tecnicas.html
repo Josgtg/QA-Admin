@@ -7,11 +7,16 @@
     <div>
         <h2>Catálogo de Técnicas QA</h2>
         <p class="subtitle">
-            Ocho técnicas base, dos por dimensión. Marca las que aplicará el
+            Ocho técnicas base, dos por dimensión, y las técnicas propias que
+            agregues. Marca las que aplicará el
             proyecto{% if proyecto %} <strong>{{ proyecto.nombre }}</strong>{% endif %}.
         </p>
     </div>
     <div class="actions">
+        <a class="btn btn-primary" href="{% url 'tecnicas:crear' %}">
+            <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+            Nueva técnica
+        </a>
         <a class="btn btn-outline" href="{% url 'tecnicas:seguimiento' %}">
             <svg class="icon icon-sm"><use href="#i-list-check"></use></svg>
             Ir al seguimiento
