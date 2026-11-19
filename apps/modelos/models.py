@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 
@@ -61,7 +61,94 @@ class ModeloCalidad(models.Model):
             'modelo_metricas__metrica__caracteristica'
         )
 
+    @classmethod
+    def disponibles(cls):
+        """Modelos que se pueden consultar y aplicar al proyecto (HU-16).
+
+        Incluye los predefinidos y los modelos propios que tengan al menos
+        una métrica activa. Así el catálogo y la pantalla de aplicación
+        ofrecen el modelo propio junto a los modelos base.
+        """
+        return cls.objects.filter(
+            models.Q(predefinido=True)
+            | models.Q(modelo_metricas__activa=True)
+        ).distinct().prefetch_related(
+            'modelo_metricas__metrica__caracteristica'
+        )
+
+    @transaction.atomic
+    def guardar_con_metricas(self, filas):
+        """Guarda el modelo propio y sus métricas en una transacción.
+
+        Cada fila del formset ya viene validada y contiene la característica,
+        el nombre de la métrica, su forma de medición, su unidad y la meta.
+        """
+        self.predefinido = False
+        self.save()
+        for fila in filas:
+            if not fila:
+                continue
+            nombre_caracteristica = fila['caracteristica'].strip()
+            caracteristica = Caracteristica.objects.filter(
+                nombre__iexact=nombre_caracteristica
+            ).first()
+            if caracteristica is None:
+                caracteristica = Caracteristica.objects.create(
+                    nombre=nombre_caracteristica
+                )
+            metrica = Metrica.objects.create(
+                caracteristica=caracteristica,
+                nombre=fila['nombre'].strip(),
+                descripcion=(fila.get('descripcion') or '').strip(),
+                forma_medicion=fila['forma_medicion'].strip(),
+                unidad=fila['unidad'].strip(),
+            )
+            ModeloMetrica.objects.create(
+                modelo_calidad=self,
+                metrica=metrica,
+                umbral=fila['meta'],
+                tipo_umbral=fila['tipo_umbral'],
+            )
+        return self
+
+    def es_propio(self):
+        """Un modelo es propio cuando no forma parte del catálogo base."""
+        return not self.predefinido
+
+    def proyectos_que_lo_usan(self):
+        """Nombres de los proyectos con alguna aplicación de este modelo."""
+        nombres = []
+        vistos = set()
+        aplicaciones = self.aplicaciones.order_by(
+            'proyecto__nombre'
+        ).values_list('proyecto_id', 'proyecto__nombre')
+        for proyecto_id, nombre in aplicaciones:
+            if proyecto_id in vistos:
+                continue
+            vistos.add(proyecto_id)
+            nombres.append(nombre)
+        return nombres
+
+    def delete(self, *args, **kwargs):
+        """Elimina el modelo y las métricas que quedan sin modelo (HU-16).
+
+        ``ModeloAplicado`` protege el borrado de un modelo en uso: en ese caso
+        Django lanza ``ProtectedError`` y no se elimina nada. Las métricas que
+        solo pertenecían a este modelo se borran después para no dejarlas
+        huérfanas.
+        """
+        metrica_ids = list(
+            self.modelo_metricas.values_list('metrica_id', flat=True)
+        )
+        resultado = super().delete(*args, **kwargs)
+        Metrica.objects.filter(
+            pk__in=metrica_ids,
+            modelo_metricas__isnull=True,
+        ).delete()
+        return resultado
+
     def obtener_modelo_metricas(self):
+        """Devuelve las métricas del modelo ordenadas por característica."""
         return self.modelo_metricas.select_related(
             'metrica__caracteristica'
         ).order_by('metrica__caracteristica__nombre', 'metrica__nombre')

@@ -24,7 +24,7 @@ Encargado -> UI: abrir(proyecto_id)
 UI -> View: get(request, proyecto_id)
 activate View
 
-View -> Modelo: obtener_predefinidos()
+View -> Modelo: disponibles()
 activate Modelo
 Modelo --> View: modelos: List<ModeloCalidad> (con características y métricas)
 deactivate Modelo
@@ -37,7 +37,7 @@ Encargado -> UI: seleccionar(modelo_id, confirmacion, contexto_confirmacion)
 note right of UI
   request.POST contiene modelo_id, confirmacion
   y el contexto firmado recibido en el aviso.
-  modelo es el ModeloCalidad predefinido seleccionado.
+  modelo es el ModeloCalidad disponible seleccionado.
 end note
 UI -> View: post(request, proyecto_id)
 activate View

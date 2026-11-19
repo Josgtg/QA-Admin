@@ -2,6 +2,8 @@ from pathlib import Path
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
+from django.db.models.deletion import ProtectedError
 from django.http import (
     FileResponse,
     Http404,
@@ -18,7 +20,7 @@ from apps.tecnicas.selection import (
     seleccionar_proyecto,
 )
 
-from .forms import RevisionMetricaForm
+from .forms import MetricasFormSet, ModeloCalidadForm, RevisionMetricaForm
 from .models import (
     Caracteristica,
     Metrica,
@@ -29,26 +31,115 @@ from .models import (
 
 
 class CatalogoModelosView(View):
-    """Catálogo detallado de los modelos predefinidos (HU-03)."""
+    """Catálogo detallado de modelos predefinidos y propios (HU-03/HU-16)."""
 
     template_name = 'modelos/catalogo_modelos.html'
 
     def get(self, request: HttpRequest) -> HttpResponse:
+        """Muestra el catálogo de modelos disponibles."""
         return render(
             request,
             self.template_name,
-            {'modelos': self.obtener_modelos_base()},
+            {'modelos': self.obtener_modelos()},
         )
 
-    def obtener_modelos_base(self):
-        return ModeloCalidad.obtener_predefinidos()
+    def obtener_modelos(self):
+        """Modelos predefinidos y propios que ofrece el catálogo (HU-16)."""
+        return ModeloCalidad.disponibles()
 
     def obtener_detalle(self, modelo_id):
+        """Devuelve un modelo disponible o responde 404."""
         return get_object_or_404(
-            ModeloCalidad,
+            ModeloCalidad.disponibles(),
             pk=modelo_id,
-            predefinido=True,
         )
+
+
+class CrearModeloPropioView(View):
+    """Alta de un modelo propio con al menos una métrica (HU-16)."""
+
+    template_name = 'modelos/crear.html'
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Muestra el formulario vacío con una fila de métrica."""
+        return self._render(
+            request,
+            ModeloCalidadForm(),
+            MetricasFormSet(),
+        )
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Valida el modelo y su formset; guarda ambos o vuelve con errores."""
+        modelo_form = ModeloCalidadForm(request.POST)
+        metricas_formset = MetricasFormSet(request.POST)
+        if not (modelo_form.is_valid() and metricas_formset.is_valid()):
+            return self._render(request, modelo_form, metricas_formset)
+
+        modelo = modelo_form.save(commit=False)
+        try:
+            modelo.guardar_con_metricas(metricas_formset.cleaned_data)
+        except IntegrityError:
+            modelo_form.add_error(
+                'nombre',
+                'Ya existe un modelo con este nombre.',
+            )
+            return self._render(request, modelo_form, metricas_formset)
+
+        messages.success(
+            request,
+            f'Modelo "{modelo.nombre}" creado correctamente.',
+        )
+        return redirect('modelos:catalogo')
+
+    def _render(self, request, modelo_form, metricas_formset):
+        """Renderiza el alta con los formularios recibidos."""
+        return render(
+            request,
+            self.template_name,
+            {
+                'modelo_form': modelo_form,
+                'metricas_formset': metricas_formset,
+            },
+        )
+
+
+class EliminarModeloPropioView(View):
+    """Baja de un modelo propio libre; informa si algún proyecto lo usa."""
+
+    http_method_names = ['post']
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        """Elimina el modelo libre; si está en uso, avisa y no borra nada."""
+        modelo = get_object_or_404(
+            ModeloCalidad,
+            pk=pk,
+            predefinido=False,
+        )
+        proyectos = modelo.proyectos_que_lo_usan()
+        if proyectos:
+            messages.error(
+                request,
+                'El modelo se utiliza en estos proyectos: '
+                + ', '.join(proyectos),
+            )
+            return redirect('modelos:catalogo')
+
+        try:
+            with transaction.atomic():
+                modelo.delete()
+        except ProtectedError:
+            messages.error(
+                request,
+                'El modelo no se puede eliminar porque tiene datos '
+                'asociados.',
+            )
+            return redirect('modelos:catalogo')
+
+        messages.success(
+            request,
+            f'Modelo "{modelo.nombre}" eliminado.',
+        )
+        return redirect('modelos:catalogo')
 
 
 class ModeloDelProyectoView(View):
@@ -75,7 +166,7 @@ class ModeloDelProyectoView(View):
 
 
 class AplicarModeloView(View):
-    """Aplica un modelo predefinido al proyecto (HU-02)."""
+    """Aplica un modelo disponible al proyecto (HU-02/HU-16)."""
 
     template_name = 'modelos/seleccion_modelo.html'
 
@@ -93,9 +184,8 @@ class AplicarModeloView(View):
             return HttpResponseBadRequest('Debe indicar el modelo.')
 
         modelo = get_object_or_404(
-            ModeloCalidad,
+            ModeloCalidad.disponibles(),
             pk=modelo_id,
-            predefinido=True,
         )
         confirmado = request.POST.get('confirmacion') == '1'
 
@@ -155,7 +245,7 @@ class AplicarModeloView(View):
             self.template_name,
             {
                 'proyecto': proyecto,
-                'modelos': ModeloCalidad.obtener_predefinidos(),
+                'modelos': ModeloCalidad.disponibles(),
                 'modelo': modelo,
                 'vigente': vigente,
                 'requiere_confirmacion': requiere_confirmacion,
@@ -362,7 +452,7 @@ class CatalogoMetricasView(View):
                 'caracteristica_seleccionada': caracteristica,
                 'metricas': metricas,
                 'agrupadas': self.agrupar_por_caracteristica(metricas),
-                'modelos': ModeloCalidad.obtener_predefinidos(),
+                'modelos': ModeloCalidad.disponibles(),
                 'modelo_seleccionado': modelo,
                 'cumple': cumple,
                 'valor': request.GET.get('valor', ''),

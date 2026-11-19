@@ -23,6 +23,10 @@ propio a partir de estas métricas está HU-16.
         <span class="head-muted">
             {{ metricas|length }} métrica{{ metricas|length|pluralize:"s" }}
         </span>
+        <a class="btn btn-primary" href="{% url 'modelos:crear' %}">
+            <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+            Crear modelo propio
+        </a>
         <a class="btn btn-outline" href="{% url 'modelos:catalogo' %}">
             <svg class="icon icon-sm"><use href="#i-layers"></use></svg>
             Ver modelos

@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+
+{% block title %}Crear modelo propio · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <a class="back-link" href="{% url 'modelos:catalogo' %}">
+            <svg class="icon icon-xs"><use href="#i-arrow-left"></use></svg>
+            Volver al catálogo
+        </a>
+        <h2>Crear modelo propio</h2>
+        <p class="subtitle">
+            Define un modelo con su descripción y al menos una métrica. La
+            métrica debe indicar su característica, forma de medir, unidad y
+            meta.
+        </p>
+    </div>
+</div>
+
+{% if messages %}
+<div class="flash-stack">
+    {% for message in messages %}
+    <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if modelo_form.non_field_errors %}
+    <div class="flash flash-error">
+        {{ modelo_form.non_field_errors|striptags }}
+    </div>
+    {% endif %}
+
+    <section class="card section-gap">
+        <div class="card-head">
+            <div>
+                <h3>Datos del modelo</h3>
+                <p class="muted">
+                    El nombre identifica al modelo en el catálogo y en la
+                    pantalla de aplicación.
+                </p>
+            </div>
+        </div>
+
+        <div class="form-grid">
+            <div class="field field-wide">
+                <label for="{{ modelo_form.nombre.id_for_label }}">
+                    {{ modelo_form.nombre.label }}
+                    <span class="field-required">*</span>
+                </label>
+                {{ modelo_form.nombre }}
+                {% if modelo_form.nombre.errors %}
+                <div class="field-error">
+                    {{ modelo_form.nombre.errors|striptags }}
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="field field-wide">
+                <label for="{{ modelo_form.descripcion.id_for_label }}">
+                    {{ modelo_form.descripcion.label }}
+                    <span class="field-required">*</span>
+                </label>
+                {{ modelo_form.descripcion }}
+                {% if modelo_form.descripcion.errors %}
+                <div class="field-error">
+                    {{ modelo_form.descripcion.errors|striptags }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <section class="card section-gap">
+        <div class="card-head">
+            <div>
+                <h3>Métricas del modelo</h3>
+                <p class="muted">
+                    Cada métrica pertenece a una característica y guarda su
+                    propia meta y tipo de umbral.
+                </p>
+            </div>
+            <button class="btn btn-outline btn-sm" type="button" id="agregar">
+                <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+                Agregar métrica
+            </button>
+        </div>
+
+        {{ metricas_formset.management_form }}
+        {% if metricas_formset.non_form_errors %}
+        <div class="flash flash-error">
+            {{ metricas_formset.non_form_errors|striptags }}
+        </div>
+        {% endif %}
+
+        <div id="metricas">
+            {% for fila in metricas_formset %}
+                {% include 'modelos/_campo_metrica.html' with fila=fila %}
+            {% endfor %}
+        </div>
+
+        <template id="fila-base">
+            {% include 'modelos/_campo_metrica.html' with fila=metricas_formset.empty_form %}
+        </template>
+    </section>
+
+    <div class="form-actions">
+        <a class="btn" href="{% url 'modelos:catalogo' %}">Cancelar</a>
+        <button class="btn btn-primary" type="submit">
+            <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+            Guardar modelo
+        </button>
+    </div>
+</form>
+
+<script>
+(function () {
+    const total = document.getElementById('id_form-TOTAL_FORMS');
+    const contenedor = document.getElementById('metricas');
+    const plantilla = document.getElementById('fila-base');
+    const agregar = document.getElementById('agregar');
+
+    if (!total || !contenedor || !plantilla || !agregar) {
+        return;
+    }
+
+    agregar.addEventListener('click', function () {
+        const html = plantilla.innerHTML.replaceAll(
+            '__prefix__',
+            total.value
+        );
+        contenedor.insertAdjacentHTML('beforeend', html);
+        total.value = Number(total.value) + 1;
+    });
+})();
+</script>
+{% endblock %}

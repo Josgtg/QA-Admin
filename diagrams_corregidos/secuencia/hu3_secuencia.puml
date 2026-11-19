@@ -26,12 +26,12 @@ Encargado -> UI: Abre el catálogo de modelos de calidad
 UI -> View: get(req: HttpRequest)
 activate View
 
-View -> Modelos: obtener_predefinidos()
+View -> Modelos: disponibles()
 activate Modelos
 Modelos --> View: List<ModeloCalidad>
 deactivate Modelos
 
-loop "por cada ModeloCalidad predefinido"
+loop "por cada ModeloCalidad disponible"
     View -> Modelo: obtener_modelo_metricas()
     activate Modelo
     Modelo --> View: List<ModeloMetrica>
@@ -61,6 +61,6 @@ end
 View --> UI: HttpResponse (200 OK)
 deactivate View
 
-UI --> Encargado: Muestra los modelos predefinidos con sus métricas, tipo de umbral y características
+UI --> Encargado: Muestra los modelos disponibles con sus métricas, tipo de umbral y características
 
 @enduml

@@ -1,0 +1,139 @@
+@startuml hu16_secuencia
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer"
+  participant "CatalogoModelosTemplate" as Catalogo
+  participant "CrearModeloTemplate" as UI
+end box
+
+box "View Layer (modelos.view)"
+  participant "CrearModeloPropioView" as CrearView
+  participant "EliminarModeloPropioView" as EliminarView
+  participant "ModeloCalidadForm" as ModeloForm
+  participant "MetricasFormSet" as FormSet
+end box
+
+box "Model Layer (modelos.model)"
+  participant "ModeloCalidad" as Modelo
+  participant "m: Metrica" as Metrica
+  participant "mm: ModeloMetrica" as ModeloMetrica
+end box
+
+box "Model Layer (reportes.model)"
+  participant "p: Proyecto" as Proyecto
+end box
+
+== Alta de un modelo propio con métricas (HU-16) ==
+
+Encargado -> Catalogo: Abre el catálogo de modelos
+Catalogo -> CrearView: Ir a «Crear modelo propio»
+Encargado -> UI: abrir()
+UI -> CrearView: get(request)
+activate CrearView
+CrearView -> CrearView: ModeloCalidadForm()
+CrearView -> CrearView: MetricasFormSet()
+CrearView --> UI: HttpResponse (200, formularios vacíos)
+deactivate CrearView
+UI --> Encargado: Muestra datos del modelo y una fila de métrica
+
+Encargado -> UI: enviar(modelo, metricas)
+UI -> CrearView: post(request)
+activate CrearView
+
+CrearView -> ModeloForm: is_valid()
+activate ModeloForm
+ModeloForm -> Modelo: objects.filter(nombre__iexact=nombre)
+activate Modelo
+Modelo --> ModeloForm: existentes: QuerySet<ModeloCalidad>
+deactivate Modelo
+alt Nombre vacío o duplicado
+    ModeloForm --> CrearView: False + error en nombre
+else Nombre válido y único
+    ModeloForm --> CrearView: True
+end
+deactivate ModeloForm
+
+CrearView -> FormSet: is_valid()
+activate FormSet
+alt Sin filas o fila incompleta
+    FormSet --> CrearView: False + errores de métrica
+else Al menos una métrica válida
+    FormSet --> CrearView: True + cleaned_data
+end
+deactivate FormSet
+
+alt Formularios inválidos
+    CrearView --> UI: HttpResponse (200, errores)
+    UI --> Encargado: Señala los campos y no guarda nada
+else Datos válidos
+    CrearView -> Modelo: guardar_con_metricas(filas)
+    activate Modelo
+    note right of Modelo
+      Comienza una transacción atómica.
+      predefinido = false.
+    end note
+    Modelo -> Modelo: save()
+    loop por cada fila de métrica
+        Modelo -> Modelo: buscar característica por nombre o crearla
+        Modelo -> Metrica: objects.create(...)
+        activate Metrica
+        Metrica --> Modelo: metrica
+        deactivate Metrica
+        Modelo -> ModeloMetrica: objects.create(umbral, tipo_umbral)
+        activate ModeloMetrica
+        ModeloMetrica --> Modelo: modelo_metrica
+        deactivate ModeloMetrica
+    end
+    Modelo --> CrearView: modelo propio guardado
+    deactivate Modelo
+    CrearView --> UI: HttpResponse (302, catálogo)
+    UI --> Encargado: El modelo propio aparece junto a los predefinidos
+end
+deactivate CrearView
+
+== Eliminación de un modelo propio (HU-16) ==
+
+Encargado -> Catalogo: Pulsa «Eliminar» en un modelo propio
+Catalogo -> EliminarView: post(request, pk)
+activate EliminarView
+EliminarView -> Modelo: get_object_or_404(pk, predefinido=False)
+activate Modelo
+Modelo --> EliminarView: modelo propio
+deactivate Modelo
+
+EliminarView -> Modelo: proyectos_que_lo_usan()
+activate Modelo
+Modelo -> Proyecto: aplicaciones.values_list('proyecto_id', 'proyecto__nombre')
+activate Proyecto
+Proyecto --> Modelo: nombres de proyectos
+deactivate Proyecto
+Modelo --> EliminarView: List<String>
+deactivate Modelo
+
+alt El modelo lo usa algún proyecto
+    EliminarView --> Catalogo: HttpResponse (302, aviso)
+    Catalogo --> Encargado: No se elimina; indica qué proyectos lo usan
+else El modelo está libre
+    EliminarView -> Modelo: delete()
+    activate Modelo
+    Modelo --> EliminarView: void
+    deactivate Modelo
+    EliminarView -> Metrica: objects.filter(pk__in=ids, sin modelo).delete()
+    activate Metrica
+    Metrica --> EliminarView: métricas huérfanas eliminadas
+    deactivate Metrica
+    EliminarView --> Catalogo: HttpResponse (302, éxito)
+    Catalogo --> Encargado: Modelo propio eliminado
+end
+deactivate EliminarView
+
+note over Catalogo, EliminarView
+  Un modelo predefinido nunca se elimina: la vista filtra
+  predefinido = false y responde 404. El borrado de un
+  modelo usado está protegido por ModeloAplicado (PROTECT).
+end note
+
+@enduml

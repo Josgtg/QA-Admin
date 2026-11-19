@@ -1,0 +1,83 @@
+{% comment %}
+Fila del formset de métricas de un modelo propio (HU-16).
+
+Se reutiliza tanto para las filas iniciales como para la plantilla que el
+JavaScript clona al pulsar «Agregar métrica».
+{% endcomment %}
+<fieldset class="metric-form">
+    <legend>Métrica</legend>
+    {% if fila.non_field_errors %}
+    <div class="flash flash-error">{{ fila.non_field_errors|striptags }}</div>
+    {% endif %}
+    <div class="form-grid">
+        <div class="field">
+            <label for="{{ fila.caracteristica.id_for_label }}">
+                {{ fila.caracteristica.label }}
+                <span class="field-required">*</span>
+            </label>
+            {{ fila.caracteristica }}
+            {% if fila.caracteristica.errors %}
+            <div class="field-error">{{ fila.caracteristica.errors|striptags }}</div>
+            {% endif %}
+        </div>
+        <div class="field">
+            <label for="{{ fila.nombre.id_for_label }}">
+                {{ fila.nombre.label }}
+                <span class="field-required">*</span>
+            </label>
+            {{ fila.nombre }}
+            {% if fila.nombre.errors %}
+            <div class="field-error">{{ fila.nombre.errors|striptags }}</div>
+            {% endif %}
+        </div>
+        <div class="field field-wide">
+            <label for="{{ fila.descripcion.id_for_label }}">
+                {{ fila.descripcion.label }}
+            </label>
+            {{ fila.descripcion }}
+            {% if fila.descripcion.errors %}
+            <div class="field-error">{{ fila.descripcion.errors|striptags }}</div>
+            {% endif %}
+        </div>
+        <div class="field field-wide">
+            <label for="{{ fila.forma_medicion.id_for_label }}">
+                {{ fila.forma_medicion.label }}
+                <span class="field-required">*</span>
+            </label>
+            {{ fila.forma_medicion }}
+            {% if fila.forma_medicion.errors %}
+            <div class="field-error">{{ fila.forma_medicion.errors|striptags }}</div>
+            {% endif %}
+        </div>
+        <div class="field">
+            <label for="{{ fila.unidad.id_for_label }}">
+                {{ fila.unidad.label }}
+                <span class="field-required">*</span>
+            </label>
+            {{ fila.unidad }}
+            {% if fila.unidad.errors %}
+            <div class="field-error">{{ fila.unidad.errors|striptags }}</div>
+            {% endif %}
+        </div>
+        <div class="field">
+            <label for="{{ fila.meta.id_for_label }}">
+                {{ fila.meta.label }}
+                <span class="field-required">*</span>
+            </label>
+            {{ fila.meta }}
+            {% if fila.meta.errors %}
+            <div class="field-error">{{ fila.meta.errors|striptags }}</div>
+            {% endif %}
+        </div>
+        <div class="field">
+            <label for="{{ fila.tipo_umbral.id_for_label }}">
+                {{ fila.tipo_umbral.label }}
+                <span class="field-required">*</span>
+            </label>
+            {{ fila.tipo_umbral }}
+            {% if fila.tipo_umbral.errors %}
+            <div class="field-error">{{ fila.tipo_umbral.errors|striptags }}</div>
+            {% endif %}
+        </div>
+    </div>
+</fieldset>

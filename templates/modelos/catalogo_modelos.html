@@ -7,14 +7,18 @@
     <div>
         <h2>Catálogo de Modelos de Calidad</h2>
         <p class="subtitle">
-            Consulta detallada: características, métricas, rango admisible y
-            umbral de cada modelo predefinido.
+            Consulta detallada de los modelos predefinidos y de los modelos
+            propios: características, métricas, rango admisible y umbral.
         </p>
     </div>
     <div class="actions">
         <span class="head-muted">
-            {{ modelos|length }} modelo{{ modelos|length|pluralize:"s" }} predefinido{{ modelos|length|pluralize:"s" }}
+            {{ modelos|length }} modelo{{ modelos|length|pluralize:"s" }}
         </span>
+        <a class="btn btn-primary" href="{% url 'modelos:crear' %}">
+            <svg class="icon icon-sm"><use href="#i-plus"></use></svg>
+            Crear modelo propio
+        </a>
         <a class="btn btn-outline" href="{% url 'modelos:modelo_proyecto' %}">
             <svg class="icon icon-sm"><use href="#i-layers"></use></svg>
             Modelo del proyecto
@@ -22,16 +26,44 @@
     </div>
 </div>
 
+{% if messages %}
+<div class="flash-stack">
+    {% for message in messages %}
+    <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
 {% for modelo in modelos %}
 <section class="card model-card section-gap">
     <div class="card-head">
         <div>
-            <h3>{{ modelo.nombre }}</h3>
+            <h3>
+                {{ modelo.nombre }}
+                {% if modelo.predefinido %}
+                <span class="status blue">Predefinido</span>
+                {% else %}
+                <span class="status amber">Propio</span>
+                {% endif %}
+            </h3>
             <p class="model-description">{{ modelo.descripcion }}</p>
         </div>
-        <span class="head-muted">
-            {{ modelo.obtener_modelo_metricas|length }} métrica{{ modelo.obtener_modelo_metricas|length|pluralize:"s" }}
-        </span>
+        <div class="detail-actions">
+            <span class="head-muted">
+                {{ modelo.obtener_modelo_metricas|length }} métrica{{ modelo.obtener_modelo_metricas|length|pluralize:"s" }}
+            </span>
+            {% if modelo.es_propio %}
+            <form class="inline-form" method="post"
+                  action="{% url 'modelos:eliminar' modelo.pk %}"
+                  onsubmit="return confirm('¿Eliminar este modelo propio?');">
+                {% csrf_token %}
+                <button class="btn btn-outline btn-sm" type="submit">
+                    <svg class="icon icon-sm"><use href="#i-trash"></use></svg>
+                    Eliminar
+                </button>
+            </form>
+            {% endif %}
+        </div>
     </div>
     <div class="table-wrap model-table-wrap">
         <table class="data">
@@ -81,7 +113,7 @@
 {% empty %}
 <section class="card empty-state">
     <svg class="icon empty-icon"><use href="#i-metrics"></use></svg>
-    <h3>No hay modelos de calidad predefinidos</h3>
+    <h3>No hay modelos de calidad disponibles</h3>
     <p>Ejecuta las migraciones para cargar los modelos base.</p>
 </section>
 {% endfor %}

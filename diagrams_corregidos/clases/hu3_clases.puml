@@ -15,7 +15,7 @@ package "modelos.template" #EEEDFE {
 
 package "modelos.view" #EEEDFE {
   class CatalogoModelosView {
-    + obtener_modelos_base(): List<ModeloCalidad>
+    + obtener_modelos(): List<ModeloCalidad>
     + obtener_detalle(modelo_id: int): ModeloCalidad
   }
 }
@@ -93,8 +93,9 @@ CatalogoModelosView ..> ModeloMetrica : lee umbral y tipo_umbral
 CatalogoModelosView ..> Caracteristica : agrupa por característica
 
 note right of ModeloCalidad
-  El catálogo de HU-03 muestra solo los
-  modelos con predefinido = true.
+  El catálogo muestra los modelos disponibles:
+  los predefinidos y los propios con al menos
+  una métrica activa (HU-16).
 end note
 
 note bottom of ModeloMetrica
