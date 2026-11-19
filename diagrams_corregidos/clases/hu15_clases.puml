@@ -1,0 +1,259 @@
+@startuml hu15_clases
+allowmixing
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam nodesep 70
+skinparam ranksep 95
+top to bottom direction
+
+title Clases: filtros de métricas por conformidad e importancia (HU-15)
+
+actor "Encargado de QA" as Encargado
+
+package "reportes.template" #FAEEDA {
+  class MetricasProyectoTemplate
+  class FiltrosMetricasTemplate
+}
+
+package "reportes.form" #FAEEDA {
+  class FiltroMetricasForm {
+    - conformidad: ChoiceField
+    - importancia: ChoiceField
+    + clean(): Dict
+    + esta_activo(): boolean
+    + valores(): Dict
+  }
+}
+
+package "reportes.view" #FAEEDA {
+  class MetricasProyectoView {
+    + get(request: HttpRequest, proyecto_id: int): HttpResponse
+    + listar_filas(proyecto: Proyecto, aplicado: ModeloAplicado): List<FilaMetrica>
+    + filtrar_por_conformidad(filas: List<FilaMetrica>, estado: EstadoMetrica): List<FilaMetrica>
+    + filtrar_por_importancia(filas: List<FilaMetrica>, importancia: Importancia): List<FilaMetrica>
+    + aplicar_filtros(filas: List<FilaMetrica>, conformidad: EstadoMetrica [0..1], importancia: Importancia [0..1]): List<FilaMetrica>
+  }
+
+  class resumen_metricas <<function>> {
+    + resumen_metricas(proyecto: Proyecto, aplicado: ModeloAplicado): List<FilaMetrica>
+  }
+
+  class FilaMetrica <<DTO>> {
+    - metrica: Metrica
+    - instantanea: MetricaAplicada
+    - ultima: RevisionMetrica [0..1]
+    - valor: Float [0..1]
+    - estado: EstadoMetrica
+    - importancia: Importancia
+    - revisiones: List<RevisionMetrica>
+  }
+}
+
+package "reportes.model" #FAEEDA {
+  class Proyecto {
+    - id: int
+    - nombre: String
+    + modelo_aplicado_vigente(): ModeloAplicado [0..1]
+  }
+}
+
+package "modelos.model" #EEEDFE {
+  enum EstadoMetrica {
+    CUMPLE
+    NO_CUMPLE
+    SIN_MEDICION
+  }
+
+  enum Importancia {
+    ALTA
+    MEDIA
+    BAJA
+  }
+
+  enum TipoUmbral {
+    MINIMO
+    MAXIMO
+  }
+
+  class Caracteristica {
+    - id: int
+    - nombre: String
+    + obtener_metricas(): List<Metrica>
+  }
+
+  class Metrica {
+    - id: int
+    - nombre: String
+    - unidad: String
+    - importancia: Importancia
+    - valor_min: Float [0..1]
+    - valor_max: Float [0..1]
+    + ultima_revision(proyecto: Proyecto): RevisionMetrica [0..1]
+    + esta_aceptada(proyecto: Proyecto): boolean
+    + obtener_importancia(): Importancia
+    + revisiones(proyecto: Proyecto): List<RevisionMetrica>
+    + validar_rango(valor: Float): boolean
+  }
+
+  class ModeloMetrica {
+    - id: int
+    - umbral: Float
+    - tipo_umbral: TipoUmbral
+    - activa: boolean
+    + evaluar_cumplimiento(valor: Float): boolean
+    + esta_activa(): boolean
+  }
+
+  class ModeloAplicado {
+    - id: int
+    - fecha_aplicacion: Date
+    - fecha_cierre: Date [0..1]
+    - vigente: boolean
+    + metricas_aplicadas(): List<MetricaAplicada>
+    + metrica_aplicada(metrica: Metrica): MetricaAplicada [0..1]
+  }
+
+  class MetricaAplicada {
+    - id: int
+    - umbral: Float
+    - tipo_umbral: TipoUmbral
+    - activa: boolean
+    + evaluar_cumplimiento(valor: Float): boolean
+    + estado(ultima: RevisionMetrica [0..1]): EstadoMetrica
+    + esta_activa(): boolean
+    + revisiones(): List<RevisionMetrica>
+  }
+
+  class RevisionMetrica {
+    - id: int
+    - valor: Float
+    - fecha: Date
+    - enlace: String [0..1]
+    - archivo: String [0..1]
+    - cumple: boolean
+    + calcular_cumple(): boolean
+    + tiene_evidencia(): boolean
+  }
+}
+
+' Relaciones de dominio
+Caracteristica "1" *-- "0..*" Metrica : agrupa
+Metrica "1" --> "0..*" ModeloMetrica : se configura en
+Metrica "1" --> "0..*" MetricaAplicada : se aplica como
+Proyecto "1" --> "0..*" ModeloAplicado : historial de aplicaciones
+ModeloAplicado "1" *-- "1..*" MetricaAplicada : instantánea
+MetricaAplicada "1" --> "0..*" RevisionMetrica : se mide en
+Metrica --> Importancia : se clasifica con
+ModeloMetrica --> TipoUmbral
+MetricaAplicada --> TipoUmbral
+MetricaAplicada ..> EstadoMetrica : calcula
+
+' Relaciones MVT
+Encargado ..> MetricasProyectoTemplate : interactúa
+MetricasProyectoTemplate ..> FiltrosMetricasTemplate : incluye
+MetricasProyectoTemplate ..> MetricasProyectoView : dispara solicitud
+MetricasProyectoView ..> FiltroMetricasForm : valida filtros
+MetricasProyectoView ..> resumen_metricas : usa
+MetricasProyectoView ..> FilaMetrica : filtra
+resumen_metricas ..> Proyecto : modelo_aplicado_vigente()
+resumen_metricas ..> MetricaAplicada : estado()
+resumen_metricas ..> Metrica : ultima_revision(), importancia
+MetricasProyectoTemplate ..> FilaMetrica : muestra estado e importancia
+
+note top of MetricasProyectoTemplate
+  CA1 · Barra de filtros con conformidad:
+  «Cumple», «No cumple» y «Sin medición».
+  CA2 · Barra de filtros con importancia:
+  «Alta», «Media» y «Baja».
+  CA3 · Los dos filtros pueden estar activos
+  a la vez; se aplican en conjunto (AND).
+  CA4 · Si no queda ninguna métrica se muestra
+  «Sin resultados» y el enlace «Quitar filtros»,
+  que vuelve a la misma URL sin query string.
+end note
+
+note right of FiltrosMetricasTemplate
+  Parcial de la pantalla de métricas: pinta los
+  selects y conserva la selección recibida por
+  query string. No escribe en la base de datos.
+  Los valores vacíos significan «Todas».
+end note
+
+note bottom of FiltroMetricasForm
+  Valida los parámetros de la URL antes de
+  filtrar. Un valor no reconocido no rompe la
+  pantalla: se descarta y se muestra un aviso,
+  igual que en el catálogo de HU-09.
+  clean() normaliza los textos de la URL a los
+  enums EstadoMetrica e Importancia.
+end note
+
+note right of MetricasProyectoView
+  GET de solo lectura: no crea, edita ni borra
+  métricas ni revisiones. Sin modelo aplicado
+  conserva el estado vacío de HU-08 y no muestra
+  la barra de filtros.
+  aplicar_filtros() primero filtra por
+  conformidad y luego por importancia; si un
+  filtro es None, no restringe ese criterio.
+end note
+
+note bottom of FilaMetrica
+  Estructura de cada fila que arma
+  resumen_metricas(): la métrica, su
+  instantánea vigente, la última revisión
+  (o null), el valor, el estado, la importancia
+  y las revisiones recientes para el historial.
+  Puede implementarse como dict o dataclass.
+end note
+
+note bottom of Metrica
+  importancia es un atributo del catálogo base
+  (ALTA, MEDIA o BAJA) y por defecto es MEDIA.
+  El encargado no la edita desde HU-15: solo
+  la consulta y filtra, igual que el resto del
+  catálogo de HU-09.
+end note
+
+note bottom of MetricaAplicada
+  estado(ultima) devuelve SIN_MEDICION cuando
+  la métrica no tiene ninguna revisión en el
+  proyecto (ultima = null). Con revisión compara
+  el último valor contra el umbral y tipo_umbral
+  de esta instantánea: CUMPLE o NO_CUMPLE.
+  Así «sin medición» no se confunde con
+  «no cumple», que es lo que ocurriría usando
+  solo esta_aceptada(). esta_aceptada() puede
+  buscar la última revisión y delegar en estado()
+  para no duplicar la regla.
+end note
+
+note top of EstadoMetrica
+  Tres estados posibles para el filtro de
+  conformidad. No se persiste: se calcula al
+  consultar la pantalla.
+end note
+
+note top of Importancia
+  Tres niveles del catálogo de métricas.
+  La importancia no cambia el índice de salud;
+  solo clasifica y filtra la consulta.
+end note
+
+note bottom of RevisionMetrica
+  HU-01 registra las revisiones; HU-15 solo las
+  lee para obtener el último valor y el historial.
+  La revisión más reciente se busca en todas las
+  aplicaciones del proyecto, no solo en la vigente.
+end note
+
+note bottom of ModeloMetrica
+  El umbral y su dirección siguen viviendo aquí y
+  en la instantánea. La importancia no se copia a
+  la instantánea porque es un atributo estable del
+  catálogo de métricas.
+end note
+
+@enduml

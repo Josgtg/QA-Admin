@@ -1,0 +1,197 @@
+@startuml hu15_secuencia
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer (reportes.template)"
+  participant "MetricasProyectoTemplate" as UI
+  participant "FiltrosMetricasTemplate" as Filtros
+end box
+
+box "View Layer (reportes.view)"
+  participant "MetricasProyectoView" as View
+  participant "f: FiltroMetricasForm" as Form
+  participant "resumen_metricas" as Resumen
+end box
+
+box "Model Layer"
+  participant "p: Proyecto" as Proyecto
+  participant "a: ModeloAplicado" as Aplicado
+  participant "ma: MetricaAplicada" as Instantanea
+  participant "m: Metrica" as Metrica
+  participant "r: RevisionMetrica" as Revision
+end box
+
+== Consulta de métricas con filtros (HU-15) ==
+
+Encargado -> UI: Abre las métricas del proyecto y elige filtros
+UI -> View: get(request, proyecto_id)
+activate View
+
+View -> Proyecto: objects.get(pk=proyecto_id)
+activate Proyecto
+Proyecto --> View: p
+deactivate Proyecto
+
+View -> Proyecto: modelo_aplicado_vigente()
+activate Proyecto
+Proyecto --> View: a o null
+deactivate Proyecto
+
+alt no hay modelo aplicado
+    View --> UI: HttpResponse (200 OK, estado vacío de HU-08)
+else hay modelo vigente
+    View -> Form: FiltroMetricasForm(request.GET)
+    activate Form
+    Form -> Form: clean()
+
+    alt parámetros válidos o ausentes
+        Form --> View: conformidad, importancia (o None)
+    else parámetro no reconocido
+        Form --> View: error de validación
+    end
+    deactivate Form
+    note right of View
+      Un filtro inválido se descarta y se
+      muestra un aviso; el resto de la
+      pantalla sigue funcionando.
+    end note
+
+    View -> Resumen: resumen_metricas(p, a)
+    activate Resumen
+
+    Resumen -> Aplicado: metricas_aplicadas()
+    activate Aplicado
+    Aplicado --> Resumen: List<MetricaAplicada>
+    deactivate Aplicado
+
+    loop por cada instantánea ma
+        Resumen -> Metrica: ultima_revision(p)
+        activate Metrica
+        Metrica --> Resumen: r o null
+        deactivate Metrica
+
+        Resumen -> Instantanea: estado(r)
+        activate Instantanea
+        alt no hay revisión
+            Instantanea --> Resumen: SIN_MEDICION
+        else hay revisión
+            Instantanea -> Instantanea: evaluar_cumplimiento(r.valor)
+            Instantanea --> Resumen: CUMPLE o NO_CUMPLE
+        end
+        deactivate Instantanea
+
+        Resumen -> Metrica: obtener_importancia()
+        activate Metrica
+        Metrica --> Resumen: ALTA, MEDIA o BAJA
+        deactivate Metrica
+
+        Resumen -> Metrica: revisiones(p)
+        activate Metrica
+        Metrica --> Resumen: List<RevisionMetrica> (primeras 10)
+        deactivate Metrica
+    end
+
+    Resumen --> View: List<FilaMetrica>
+    deactivate Resumen
+
+    View -> View: aplicar_filtros(filas, conformidad, importancia)
+    activate View
+    opt conformidad seleccionada
+        View -> View: filtrar_por_conformidad(filas, estado)
+    end
+    opt importancia seleccionada
+        View -> View: filtrar_por_importancia(filas, importancia)
+    end
+    deactivate View
+
+    alt no quedan filas y hay filtros activos
+        View --> UI: HttpResponse (200 OK, sin resultados)
+        UI --> Encargado: «Sin resultados» + enlace «Quitar filtros»
+    else quedan filas
+        View --> UI: HttpResponse (200 OK, filas filtradas)
+        UI --> Encargado: Barra de filtros + tarjetas con estado e importancia
+    end
+end
+deactivate View
+
+== Combinación de los dos filtros (HU-15) ==
+
+Encargado -> Filtros: Elige conformidad «No cumple» e importancia «Alta»
+Filtros -> View: get(request, proyecto_id) «GET ?conformidad=no_cumple&importancia=alta»
+activate View
+View -> Form: FiltroMetricasForm(request.GET)
+activate Form
+Form --> View: EstadoMetrica.NO_CUMPLE, Importancia.ALTA
+deactivate Form
+View -> Resumen: resumen_metricas(p, a)
+activate Resumen
+Resumen --> View: List<FilaMetrica>
+deactivate Resumen
+View -> View: aplicar_filtros(filas, NO_CUMPLE, ALTA)
+activate View
+View -> View: filtrar_por_conformidad(filas, NO_CUMPLE)
+View -> View: filtrar_por_importancia(filas, ALTA)
+View --> View: solo métricas que cumplen ambos criterios
+deactivate View
+View --> UI: HttpResponse (200 OK)
+deactivate View
+UI --> Encargado: Subconjunto que cumple los dos filtros a la vez
+
+== Filtro por «Sin medición» (HU-15) ==
+
+Encargado -> Filtros: Elige conformidad «Sin medición»
+Filtros -> View: GET ?conformidad=sin_medicion
+activate View
+View -> Form: FiltroMetricasForm(request.GET)
+activate Form
+Form --> View: EstadoMetrica.SIN_MEDICION
+deactivate Form
+View -> Resumen: resumen_metricas(p, a)
+activate Resumen
+loop por cada instantánea ma
+    Resumen -> Metrica: ultima_revision(p)
+    activate Metrica
+    Metrica --> Resumen: null
+    deactivate Metrica
+    Resumen -> Instantanea: estado(null)
+    activate Instantanea
+    Instantanea --> Resumen: SIN_MEDICION
+    deactivate Instantanea
+end
+Resumen --> View: List<FilaMetrica>
+deactivate Resumen
+View -> View: filtrar_por_conformidad(filas, SIN_MEDICION)
+View --> UI: HttpResponse (200 OK)
+deactivate View
+UI --> Encargado: Solo métricas sin ninguna revisión registrada
+
+== Quitar filtros (HU-15) ==
+
+Encargado -> Filtros: Pulsa «Quitar filtros»
+Filtros -> View: get(request, proyecto_id) «misma URL sin query string»
+activate View
+View -> Form: FiltroMetricasForm(GET vacío)
+activate Form
+Form --> View: conformidad = None, importancia = None
+deactivate Form
+View -> Resumen: resumen_metricas(p, a)
+activate Resumen
+Resumen --> View: todas las filas
+deactivate Resumen
+View -> View: aplicar_filtros(filas, None, None)
+View --> UI: HttpResponse (200 OK)
+deactivate View
+UI --> Encargado: Todas las métricas del modelo vigente
+
+note over Encargado, Revision
+  HU-15 es de solo lectura: ninguna operación de
+  estos flujos escribe en la base de datos.
+  Los filtros viven en la URL (query string), así
+  que se pueden compartir y conservar al recargar.
+  Sin coincidencias se muestra «Sin resultados» y
+  la opción de quitar los filtros.
+end note
+
+@enduml
