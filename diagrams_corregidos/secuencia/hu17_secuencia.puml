@@ -1,0 +1,22 @@
+@startuml
+title HU-17 · Alta y selección de una técnica propia
+actor Encargado
+participant Catálogo
+participant "Formulario de técnica" as Alta
+database "Base de datos" as BD
+participant "Selección de técnicas" as Seleccion
+Encargado -> Alta : Enviar nombre, dimensión, tipo, descripción y pasos
+Alta -> Alta : Validar campos y al menos un paso con instrucción y evidencia esperada
+alt Datos incompletos
+  Alta --> Encargado : Mostrar errores y conservar captura
+else Datos válidos
+  Alta -> BD : Guardar técnica propia y pasos ordenados en una transacción
+  Alta -> Catálogo : Volver al catálogo
+  Catálogo --> Encargado : Mostrar técnica con etiqueta Propia
+  Encargado -> Seleccion : Elegir técnica para un proyecto
+  Seleccion -> BD : Registrar seguimiento del proyecto y sus pasos
+end
+Encargado -> Catálogo : Solicitar edición o borrado de una técnica base
+Catálogo -> BD : Consultar origen de la técnica
+Catálogo --> Encargado : Rechazar el cambio
+@enduml

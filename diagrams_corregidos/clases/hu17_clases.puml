@@ -1,0 +1,27 @@
+@startuml
+title HU-17 · Técnicas propias
+class TecnicaQA {
+  nombre
+  descripcion
+  dimension
+  tipo_control
+  objetivo
+  pregunta_clave
+  es_base : boolean
+}
+class Paso {
+  orden
+  instruccion
+  evidencia_esperada
+}
+TecnicaQA "1" *-- "1..*" Paso
+CatalogoTQA "0..1" -- "*" TecnicaQA
+Proyecto "1" -- "*" SeguimientoTecnica
+SeguimientoTecnica "*" --> "1" TecnicaQA
+note right of TecnicaQA
+  Marcar las ocho técnicas iniciales como base.
+  Crear las nuevas como propias.
+  Rechazar en servidor edición y borrado de base,
+  incluyendo los cambios a sus pasos.
+end note
+@enduml

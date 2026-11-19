@@ -2,18 +2,18 @@
 
 {% block title %}Modelos de calidad · QA Admin{% endblock %}
 
-{% block content %}
+{% block content %}{% for message in messages %}<p role="alert">{{ message }}</p>{% endfor %}
 <div class="page-head">
     <div>
         <h2>Catálogo de Modelos de Calidad</h2>
         <p class="subtitle">
             Consulta detallada: características, métricas, rango admisible y
-            umbral de cada modelo predefinido.
+            umbral de cada modelo.
         </p>
     </div>
-    <div class="actions">
+    <div class="actions"><a class="btn btn-outline" href="{% url 'modelos:crear' %}">Crear modelo propio</a>
         <span class="head-muted">
-            {{ modelos|length }} modelo{{ modelos|length|pluralize:"s" }} predefinido{{ modelos|length|pluralize:"s" }}
+            {{ modelos|length }} modelo{{ modelos|length|pluralize:"s" }}
         </span>
         <a class="btn btn-outline" href="{% url 'modelos:modelo_proyecto' %}">
             <svg class="icon icon-sm"><use href="#i-layers"></use></svg>
@@ -27,6 +27,7 @@
     <div class="card-head">
         <div>
             <h3>{{ modelo.nombre }}</h3>
+            {% if not modelo.predefinido %}<form method="post" action="{% url 'modelos:eliminar' modelo.pk %}">{% csrf_token %}<button>Eliminar modelo propio</button></form>{% endif %}
             <p class="model-description">{{ modelo.descripcion }}</p>
         </div>
         <span class="head-muted">

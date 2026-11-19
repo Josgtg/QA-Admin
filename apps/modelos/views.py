@@ -41,13 +41,11 @@ class CatalogoModelosView(View):
         )
 
     def obtener_modelos_base(self):
-        return ModeloCalidad.obtener_predefinidos()
+        return ModeloCalidad.disponibles()
 
     def obtener_detalle(self, modelo_id):
         return get_object_or_404(
-            ModeloCalidad,
-            pk=modelo_id,
-            predefinido=True,
+            ModeloCalidad.disponibles(), pk=modelo_id,
         )
 
 
@@ -93,9 +91,7 @@ class AplicarModeloView(View):
             return HttpResponseBadRequest('Debe indicar el modelo.')
 
         modelo = get_object_or_404(
-            ModeloCalidad,
-            pk=modelo_id,
-            predefinido=True,
+            ModeloCalidad.disponibles(), pk=modelo_id,
         )
         confirmado = request.POST.get('confirmacion') == '1'
 
@@ -155,7 +151,7 @@ class AplicarModeloView(View):
             self.template_name,
             {
                 'proyecto': proyecto,
-                'modelos': ModeloCalidad.obtener_predefinidos(),
+                'modelos': ModeloCalidad.disponibles(),
                 'modelo': modelo,
                 'vigente': vigente,
                 'requiere_confirmacion': requiere_confirmacion,
@@ -362,7 +358,7 @@ class CatalogoMetricasView(View):
                 'caracteristica_seleccionada': caracteristica,
                 'metricas': metricas,
                 'agrupadas': self.agrupar_por_caracteristica(metricas),
-                'modelos': ModeloCalidad.obtener_predefinidos(),
+                'modelos': ModeloCalidad.disponibles(),
                 'modelo_seleccionado': modelo,
                 'cumple': cumple,
                 'valor': request.GET.get('valor', ''),

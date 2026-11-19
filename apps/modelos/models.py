@@ -40,6 +40,12 @@ class ModeloCalidad(models.Model):
             'modelo_metricas__metrica__caracteristica'
         )
 
+    @classmethod
+    def disponibles(cls):
+        return cls.objects.filter(
+            models.Q(predefinido=True) | models.Q(modelo_metricas__activa=True)
+        ).distinct()
+
     def obtener_modelo_metricas(self):
         return self.modelo_metricas.select_related(
             'metrica__caracteristica'
