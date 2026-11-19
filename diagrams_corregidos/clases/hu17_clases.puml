@@ -1,0 +1,53 @@
+@startuml
+!pragma layout smetana
+title HU-17 · Técnicas de calidad propias
+class GestionTecnicaPropiaView <<propuesta>> {
+  +crear(datos: DatosTecnica): HttpResponse
+  +modificar(tecnica: TecnicaQA, accion: Accion): HttpResponse
+}
+class DatosTecnica <<formulario propuesto>> {
+  +validar(): ListaErrores
+  +guardar(): TecnicaQA
+}
+class TecnicaQA {
+  +nombre: str
+  +descripcion: str
+  +objetivo: str
+  +pregunta_clave: str
+  +dimension: Dimension
+  +tipo_control: TipoControl
+  +es_base: bool
+  +permite_cambios(): bool
+}
+class Paso {
+  +orden: int
+  +instruccion: str
+  +evidencia_esperada: str
+}
+class CatalogoTecnicasView {
+  +listar_tecnicas(): QuerySet<TecnicaQA>
+}
+class SeguirTecnicaView {
+  +seguir_tecnica(request: HttpRequest, proyecto: Proyecto): HttpResponse
+}
+class Proyecto
+class SeguimientoTecnica
+GestionTecnicaPropiaView ..> DatosTecnica
+DatosTecnica ..> TecnicaQA
+TecnicaQA "1" *-- "1..*" Paso
+Proyecto "1" -- "*" SeguimientoTecnica
+SeguimientoTecnica "*" --> "1" TecnicaQA
+SeguirTecnicaView ..> SeguimientoTecnica
+CatalogoTecnicasView ..> TecnicaQA
+note bottom of DatosTecnica
+  Exigir nombre, dimensión, tipo, descripción y pasos.
+  Cada paso requiere instrucción y evidencia esperada.
+  Guardar la técnica y sus pasos en una transacción.
+end note
+note right of TecnicaQA
+  es_base y permite_cambios son propuestos.
+  Identificar las ocho técnicas originales como base.
+  Una técnica nueva es propia. Proteger también los
+  pasos de las técnicas base al editar o borrar.
+end note
+@enduml
