@@ -1834,3 +1834,52 @@ class ReporteProyectoViewTests(TestCase):
         self.client.get(self.url)
 
         self.assertEqual(self.client.session[SESSION_KEY], self.proyecto.pk)
+
+
+class BusquedaProyectosTests(TestCase):
+    """Búsqueda de proyectos por nombre (HU-20)."""
+
+    def setUp(self):
+        self.url = reverse('reportes:lista')
+        self.activo = crear_proyecto('Aplicación Móvil', -5, 5)
+        self.terminado = crear_proyecto('Portal Bancario', -40, -10)
+
+    def test_ignora_mayusculas(self):
+        respuesta = self.client.get(self.url, {'q': 'APLICACION'})
+
+        self.assertContains(respuesta, 'Aplicación Móvil')
+        self.assertNotContains(respuesta, 'Portal Bancario')
+
+    def test_ignora_acentos(self):
+        respuesta = self.client.get(self.url, {'q': 'aplicacion'})
+
+        self.assertContains(respuesta, 'Aplicación Móvil')
+
+    def test_busqueda_parcial(self):
+        respuesta = self.client.get(self.url, {'q': 'banc'})
+
+        self.assertContains(respuesta, 'Portal Bancario')
+        self.assertNotContains(respuesta, 'Aplicación Móvil')
+
+    def test_sin_resultados_muestra_mensaje(self):
+        respuesta = self.client.get(self.url, {'q': 'zzz'})
+
+        self.assertContains(respuesta, 'Sin resultados')
+        self.assertContains(respuesta, 'Quitar búsqueda')
+
+    def test_borrar_busqueda_devuelve_todos(self):
+        self.client.get(self.url, {'q': 'zzz'})
+
+        respuesta = self.client.get(self.url, {'q': ''})
+
+        self.assertContains(respuesta, 'Aplicación Móvil')
+        self.assertContains(respuesta, 'Portal Bancario')
+
+    def test_busqueda_respeta_el_periodo(self):
+        respuesta = self.client.get(
+            self.url,
+            {'q': 'a', 'periodo': 'activo'},
+        )
+
+        self.assertContains(respuesta, 'Aplicación Móvil')
+        self.assertNotContains(respuesta, 'Portal Bancario')

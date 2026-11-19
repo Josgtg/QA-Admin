@@ -52,13 +52,52 @@
     {% endfor %}
 </div>
 
-{% if periodo_seleccionado %}
+{% if periodo_seleccionado and not busqueda %}
 <p class="subtitle">
     Mostrando solo el periodo <strong>{{ periodo_seleccionado.nombre }}</strong>.
     <a class="link" href="{% url 'reportes:lista' %}">Ver todos</a>
 </p>
 {% endif %}
 
+{% if busqueda %}
+<p class="subtitle">
+    {% if proyectos %}
+    {{ proyectos|length }} proyecto{{ proyectos|length|pluralize:"s" }}
+    coincide{{ proyectos|length|pluralize:"n" }} con
+    <strong>«{{ busqueda }}»</strong>{% if periodo_seleccionado %} en el
+    periodo <strong>{{ periodo_seleccionado.nombre }}</strong>{% endif %}.
+    <a class="link"
+       href="{% url 'reportes:lista' %}{% if periodo_seleccionado %}?periodo={{ periodo_seleccionado.id }}{% endif %}">
+        Quitar búsqueda
+    </a>
+    {% else %}
+    Sin resultados para <strong>«{{ busqueda }}»</strong>
+    {% if periodo_seleccionado %}en el periodo
+    <strong>{{ periodo_seleccionado.nombre }}</strong>{% endif %}.
+    {% endif %}
+</p>
+{% endif %}
+
+{% if busqueda and not proyectos %}
+<section class="card section-gap">
+    <div class="empty-state">
+        <svg class="icon empty-icon"><use href="#i-search"></use></svg>
+        <h3>Sin resultados</h3>
+        <p>
+            Ningún proyecto coincide con «{{ busqueda }}»
+            {% if periodo_seleccionado %}en el periodo
+            {{ periodo_seleccionado.nombre }}{% endif %}.
+        </p>
+        <div class="actions empty-actions">
+            <a class="btn"
+               href="{% url 'reportes:lista' %}{% if periodo_seleccionado %}?periodo={{ periodo_seleccionado.id }}{% endif %}">
+                <svg class="icon icon-sm"><use href="#i-arrow-left"></use></svg>
+                Quitar búsqueda
+            </a>
+        </div>
+    </div>
+</section>
+{% else %}
 {% for grupo in grupos %}
 <section class="card section-gap">
     <div class="card-head">
@@ -161,11 +200,12 @@
 </section>
 {% empty %}
 <section class="card">
-    <div class="empty-row">No se encontraron proyectos con ese criterio.</div>
+    <div class="empty-row">Sin resultados.</div>
 </section>
 {% endfor %}
 
 {% include 'reportes/_previsualizacion_proyecto.html' %}
+{% endif %}
 
 <script>
 document.querySelectorAll('.project-row').forEach(function (row) {
