@@ -1,0 +1,97 @@
+@startuml hu18_secuencia
+skinparam shadowing false
+skinparam responseMessageBelowArrow true
+
+actor "Encargado de QA" as Encargado
+
+box "Template Layer"
+participant "ReporteProyectoTemplate" as UI
+end box
+
+box "View Layer (reportes.view)"
+participant "ReporteProyectoView" as View
+end box
+
+box "Model Layer (reportes.model)"
+participant "p: Proyecto" as Proyecto
+participant "rr: ResumenReporte" as Resumen
+end box
+
+box "Model Layer (tecnicas.model)"
+participant "st: SeguimientoTecnica" as Seguimiento
+end box
+
+== Reporte rapido del proyecto (HU-18) ==
+
+Encargado -> UI: Abre el reporte del proyecto
+UI -> View: get(request, proyecto_id)
+activate View
+
+View -> View: obtener_proyecto(proyecto_id)
+
+View -> Proyecto: indice_salud()
+activate Proyecto
+Proyecto --> View: Float
+deactivate Proyecto
+
+View -> Proyecto: cumplimiento_metricas()
+activate Proyecto
+Proyecto --> View: Float
+deactivate Proyecto
+
+View -> Proyecto: avance_tecnicas()
+activate Proyecto
+Proyecto --> View: Float
+deactivate Proyecto
+
+View -> View: metricas_de_atencion(p)
+note right of View
+  Incluye las metricas sin medicion:
+  cuentan como no cumplidas.
+end note
+
+View -> Proyecto: estado_metricas()
+activate Proyecto
+Proyecto --> View: List
+deactivate Proyecto
+
+View -> Proyecto: seguimientos_activos()
+activate Proyecto
+Proyecto --> View: List<SeguimientoTecnica>
+deactivate Proyecto
+
+loop "por cada tecnica en seguimiento"
+    View -> Seguimiento: pasos_pendientes()
+    activate Seguimiento
+    Seguimiento --> View: List<SeguimientoPaso>
+    deactivate Seguimiento
+end
+
+View -> Proyecto: ultima_medicion()
+activate Proyecto
+Proyecto --> View: Date
+deactivate Proyecto
+
+View -> Proyecto: ultima_evidencia()
+activate Proyecto
+Proyecto --> View: Date
+deactivate Proyecto
+
+View -> View: ultima_actividad(p)
+View -> View: obtener_resumen(p)
+
+View -> Resumen: new(salud, cumplimiento, avance, ultima_actividad)
+activate Resumen
+Resumen --> View: ResumenReporte
+deactivate Resumen
+
+View --> UI: HttpResponse (200 OK)
+deactivate View
+
+alt "el proyecto tiene datos"
+    UI --> Encargado: Muestra atencion primero, luego salud, cumplimiento, avance por dimension y fechas
+else "el proyecto no tiene datos"
+    UI --> Encargado: Lista que falta configurar o registrar
+end
+
+@enduml

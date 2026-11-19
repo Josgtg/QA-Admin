@@ -1,0 +1,275 @@
+{% extends 'base.html' %}
+
+{% block title %}Reporte rápido · {{ proyecto.nombre }} · QA Admin{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <a class="back-link" href="{% url 'reportes:lista' %}">
+            <svg class="icon icon-xs"><use href="#i-arrow-left"></use></svg>
+            Volver a proyectos
+        </a>
+        <h2>Reporte rápido del proyecto</h2>
+        <p class="subtitle">
+            {{ proyecto.nombre }} ·
+            {% include 'reportes/_estado_proyecto.html' with periodo=proyecto.periodo %}
+            {% if resumen.ultima_actividad %}
+            · Última actividad {{ resumen.ultima_actividad|date:"d/m/Y" }}
+            {% endif %}
+        </p>
+    </div>
+    <div class="actions">
+        <a class="btn" href="{% url 'reportes:tablero' proyecto.pk %}">
+            <svg class="icon icon-sm"><use href="#i-dashboard"></use></svg>
+            Ver tablero
+        </a>
+        <a class="btn" href="{% url 'reportes:metricas' proyecto.pk %}">
+            <svg class="icon icon-sm"><use href="#i-metrics"></use></svg>
+            Métricas
+        </a>
+        <a class="btn btn-primary" href="{% url 'reportes:editar' proyecto.pk %}">
+            <svg class="icon icon-sm"><use href="#i-pencil"></use></svg>
+            Editar proyecto
+        </a>
+    </div>
+</div>
+
+{% if resumen.esta_vacio %}
+<section class="card empty-state">
+    <svg class="icon empty-icon"><use href="#i-alert-circle"></use></svg>
+    <h3>Este proyecto todavía no tiene datos</h3>
+    <p>
+        El reporte se arma con las mediciones de las métricas y con las
+        evidencias de las técnicas.
+    </p>
+</section>
+{% else %}
+
+{% if metricas_atencion or tecnicas_pendientes %}
+<section class="card attention-card">
+    <div class="card-head">
+        <h3>Requiere atención</h3>
+        <span class="head-muted">
+            {{ metricas_atencion|length }} métrica{{ metricas_atencion|length|pluralize:"s" }}
+            · {{ tecnicas_pendientes|length }} técnica{{ tecnicas_pendientes|length|pluralize:"s" }}
+        </span>
+    </div>
+    <div class="attention-grid">
+        <div>
+            <p class="attention-title">Métricas que no cumplen</p>
+            {% for fila in metricas_atencion %}
+            <div class="metric-row {% if fila.valor is None %}border-amber{% else %}border-red{% endif %}">
+                <div class="metric-top">
+                    <span>{{ fila.metrica.nombre }}</span>
+                    <span class="metric-score {% if fila.valor is None %}gray{% else %}red{% endif %}">
+                        {% if fila.valor is None %}
+                        Sin medición
+                        {% else %}
+                        {{ fila.valor }} / meta
+                        {% if fila.instantanea.tipo_umbral == 'MINIMO' %}≥{% else %}≤{% endif %}
+                        {{ fila.instantanea.umbral }}
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="cell-sub">
+                    {% if fila.valor is None %}
+                    Todavía no tiene medición y cuenta como no cumplida.
+                    {% else %}
+                    No cumple · última medición {{ fila.ultima.fecha|date:"d/m/Y" }}
+                    {% endif %}
+                </div>
+            </div>
+            {% empty %}
+            <p class="muted">Ninguna métrica requiere atención.</p>
+            {% endfor %}
+        </div>
+        <div>
+            <p class="attention-title">Técnicas con pasos pendientes</p>
+            {% for tecnica in tecnicas_pendientes %}
+            <div class="metric-row border-amber">
+                <div class="metric-top">
+                    <span>{{ tecnica.seguimiento.tecnica.nombre }}</span>
+                    <span class="status amber">
+                        {{ tecnica.completados }} de {{ tecnica.total }} pasos
+                    </span>
+                </div>
+                <div class="bar">
+                    <span class="fill-amber"
+                          style="width: {{ tecnica.seguimiento.porcentaje_avance }}%"></span>
+                </div>
+                <div class="cell-sub">
+                    Pendiente: {{ tecnica.pendientes.0.paso.instruccion|truncatechars:70 }}
+                    {% if tecnica.pendientes_total > 1 %}
+                    y {{ tecnica.pendientes_total|add:"-1" }} más
+                    {% endif %}
+                </div>
+            </div>
+            {% empty %}
+            <p class="muted">Ninguna técnica tiene pasos pendientes.</p>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<div class="stats-grid section-gap">
+    <section class="stat-card">
+        <div class="stat-icon blue">
+            <svg class="icon"><use href="#i-dashboard"></use></svg>
+        </div>
+        <div class="stat-value">
+            {% if resumen.salud is not None %}
+            {{ resumen.salud|floatformat:"0" }}<small class="muted">/100</small>
+            {% else %}—{% endif %}
+        </div>
+        <div class="stat-label">Índice de salud · {{ riesgo_salud }}</div>
+        {% if resumen.salud is not None %}
+        <div class="bar section-gap">
+            <span class="fill-{{ tono_salud }}" style="width: {{ resumen.salud }}%"></span>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="stat-card">
+        <div class="stat-icon amber">
+            <svg class="icon"><use href="#i-metrics"></use></svg>
+        </div>
+        <div class="stat-value">
+            {% if resumen.cumplimiento is not None %}
+            {{ resumen.cumplimiento|floatformat:"0" }} %
+            {% else %}—{% endif %}
+        </div>
+        <div class="stat-label">Cumplimiento de métricas</div>
+        {% if resumen.cumplimiento is not None %}
+        <div class="bar section-gap">
+            <span class="fill-amber" style="width: {{ resumen.cumplimiento }}%"></span>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="stat-card">
+        <div class="stat-icon pink">
+            <svg class="icon"><use href="#i-techniques"></use></svg>
+        </div>
+        <div class="stat-value">
+            {% if resumen.avance is not None %}
+            {{ resumen.avance|floatformat:"0" }} %
+            {% else %}—{% endif %}
+        </div>
+        <div class="stat-label">Avance de técnicas</div>
+        {% if resumen.avance is not None %}
+        <div class="bar section-gap">
+            <span class="fill-green" style="width: {{ resumen.avance }}%"></span>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<section class="card section-gap">
+    <div class="card-head">
+        <h3>Avance de técnicas por dimensión</h3>
+        <span class="head-muted">4 dimensiones</span>
+    </div>
+    <div class="dims">
+        {% for dimension in dimensiones %}
+        <article class="dim-card dim-{{ dimension.color }}">
+            <div class="dim-head">
+                <span class="dim-name">{{ dimension.etiqueta }}</span>
+                <span class="dim-count {{ dimension.color }}">{{ dimension.porcentaje }} %</span>
+            </div>
+            <div class="dim-meta">
+                <div class="bar">
+                    <span class="fill-{{ dimension.color }}"
+                          style="width: {{ dimension.porcentaje }}%"></span>
+                </div>
+                <b>{{ dimension.completados }}/{{ dimension.total }}</b>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+</section>
+
+{% if metricas %}
+<section class="card section-gap">
+    <div class="card-head">
+        <h3>Estado de métricas</h3>
+        <span class="head-muted">
+            {% if ultima_medicion %}
+            Última medición: {{ ultima_medicion|date:"d/m/Y" }}
+            {% else %}Sin mediciones{% endif %}
+        </span>
+    </div>
+    <div class="table-wrap">
+        <table class="data metrics-table">
+            <thead>
+                <tr>
+                    <th>Métrica</th>
+                    <th>Meta</th>
+                    <th>Último valor</th>
+                    <th>Estado</th>
+                    <th>Última medición</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fila in metricas %}
+                <tr>
+                    <td>
+                        <div class="cell-title">{{ fila.metrica.nombre }}</div>
+                        <div class="cell-sub">{{ fila.metrica.caracteristica.nombre }}</div>
+                    </td>
+                    <td>
+                        {% if fila.instantanea.tipo_umbral == 'MINIMO' %}≥{% else %}≤{% endif %}
+                        {{ fila.instantanea.umbral }}
+                        {% if fila.metrica.unidad %}{{ fila.metrica.unidad }}{% endif %}
+                    </td>
+                    <td>
+                        {% if fila.valor is None %}—{% else %}
+                        {{ fila.valor }}
+                        {% if fila.metrica.unidad %}{{ fila.metrica.unidad }}{% endif %}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if fila.valor is None %}
+                        <span class="status gray">Sin medición</span>
+                        {% elif fila.aceptada %}
+                        <span class="status green">Cumple</span>
+                        {% else %}
+                        <span class="status red">No cumple</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if fila.ultima %}{{ fila.ultima.fecha|date:"d/m/Y" }}{% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer">
+        <svg class="icon icon-xs"><use href="#i-clock"></use></svg>
+        {% if ultima_evidencia %}
+        Última evidencia registrada: {{ ultima_evidencia|date:"d/m/Y" }}
+        {% else %}
+        Sin evidencias registradas todavía
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+{% endif %}
+
+{% if faltantes %}
+<section class="card section-gap">
+    <div class="card-head">
+        <h3>Qué falta configurar o registrar</h3>
+    </div>
+    <ol class="steps-list">
+        {% for falta in faltantes %}
+        <li>
+            {{ falta.texto }}
+            <a class="link" href="{{ falta.url }}">{{ falta.accion }}</a>
+        </li>
+        {% endfor %}
+    </ol>
+</section>
+{% endif %}
+{% endblock %}

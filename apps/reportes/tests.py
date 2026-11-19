@@ -6,8 +6,9 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import formats, timezone
 
-from apps.tecnicas.models import SeguimientoTecnica, TecnicaQA
+from apps.tecnicas.models import Evidencia, SeguimientoTecnica, TecnicaQA
 from apps.tecnicas.selection import SESSION_KEY
+from apps.tecnicas.services import seguir_tecnica
 from apps.modelos.models import (
     ModeloAplicado,
     ModeloCalidad,
@@ -1681,3 +1682,156 @@ class EstadoMetricasHU14Tests(TestCase):
             caida['causas'][0]['nombre'], self.metricas[0].metrica.nombre
         )
         self.assertContains(respuesta, 'dejó de cumplir su meta')
+
+
+class ReporteProyectoViewTests(TestCase):
+    """Reporte rápido del estado del proyecto (HU-18)."""
+
+    def setUp(self):
+        self.proyecto = crear_proyecto('Alpha')
+        self.persona = Persona.objects.create(nombre='Ana')
+        self.miembro = MiembroProyecto.objects.create(
+            proyecto=self.proyecto,
+            persona=self.persona,
+            rol='QA',
+        )
+        self.tecnica = crear_tecnica()
+        self.tecnica.pasos.create(
+            orden=1,
+            instruccion='Revisar el estandar',
+            evidencia_esperada='Enlace o archivo',
+        )
+        self.tecnica.pasos.create(
+            orden=2,
+            instruccion='Ejecutar las pruebas',
+            evidencia_esperada='Reporte de pruebas',
+        )
+        self.seguimiento = seguir_tecnica(self.proyecto, self.tecnica)
+        self.url = reverse('reportes:reporte', args=[self.proyecto.pk])
+
+    def _aplicar_modelo(self):
+        aplicado = self.proyecto.modelo_aplicado_vigente()
+        if aplicado is None:
+            aplicado = self.proyecto.aplicar_modelo(
+                ModeloCalidad.obtener_predefinidos().first()
+            )
+        return aplicado
+
+    def _medir(self, cumple=True, fecha=None):
+        aplicado = self._aplicar_modelo()
+        instantanea = aplicado.metricas_aplicadas().first()
+        umbral = instantanea.umbral
+        if instantanea.tipo_umbral == 'MINIMO':
+            valor = umbral if cumple else umbral - 1
+        else:
+            valor = umbral if cumple else umbral + 1
+        RevisionMetrica.objects.create(
+            metrica_aplicada=instantanea,
+            miembro_proyecto=self.miembro,
+            valor=valor,
+            enlace='https://ejemplo.test/medicion',
+            fecha=fecha or timezone.localdate(),
+        )
+        return instantanea
+
+    def _registrar_evidencia(self, fecha=None):
+        paso = self.seguimiento.pasos.order_by('paso__orden').first()
+        Evidencia.objects.create(
+            seguimiento_paso=paso,
+            miembro_proyecto=self.miembro,
+            enlace='https://ejemplo.test/evidencia',
+            fecha=fecha or timezone.localdate(),
+        )
+        paso.marcar_completado()
+        return paso
+
+    def test_proyecto_inexistente_devuelve_404(self):
+        respuesta = self.client.get(
+            reverse('reportes:reporte', args=[999999])
+        )
+
+        self.assertEqual(respuesta.status_code, 404)
+
+    def test_sin_datos_dice_que_falta_configurar(self):
+        vacio = crear_proyecto('Vacío')
+
+        respuesta = self.client.get(
+            reverse('reportes:reporte', args=[vacio.pk])
+        )
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'todavía no tiene datos')
+        self.assertContains(respuesta, 'Qué falta configurar o registrar')
+        self.assertContains(respuesta, 'Aplicar modelo')
+
+    def test_muestra_salud_cumplimiento_y_avance(self):
+        self._medir(cumple=True)
+
+        respuesta = self.client.get(self.url)
+
+        self.assertContains(respuesta, 'Índice de salud')
+        self.assertContains(respuesta, 'Cumplimiento de métricas')
+        self.assertContains(respuesta, 'Avance de técnicas')
+        self.assertIsNotNone(respuesta.context['resumen'].salud)
+        self.assertIsNotNone(respuesta.context['resumen'].cumplimiento)
+        self.assertIsNotNone(respuesta.context['resumen'].avance)
+
+    def test_lo_que_necesita_atencion_va_primero(self):
+        self._medir(cumple=False)
+
+        respuesta = self.client.get(self.url)
+        contenido = respuesta.content.decode()
+
+        self.assertIn('Requiere atención', contenido)
+        self.assertLess(
+            contenido.index('Requiere atención'),
+            contenido.index('Estado de métricas'),
+        )
+
+    def test_metrica_sin_medicion_aparece_en_atencion(self):
+        self._aplicar_modelo()
+
+        respuesta = self.client.get(self.url)
+
+        self.assertContains(respuesta, 'Sin medición')
+        self.assertGreaterEqual(
+            len(respuesta.context['metricas_atencion']),
+            1,
+        )
+
+    def test_muestra_ultima_medicion_y_evidencia(self):
+        hoy = timezone.localdate()
+        self._medir(cumple=True, fecha=hoy - timedelta(days=2))
+        self._registrar_evidencia(fecha=hoy)
+
+        respuesta = self.client.get(self.url)
+
+        self.assertEqual(
+            respuesta.context['ultima_medicion'],
+            hoy - timedelta(days=2),
+        )
+        self.assertEqual(respuesta.context['ultima_evidencia'], hoy)
+        self.assertContains(respuesta, 'Última evidencia registrada')
+
+    def test_tecnicas_con_pasos_pendientes(self):
+        respuesta = self.client.get(self.url)
+
+        filas = respuesta.context['tecnicas_pendientes']
+        self.assertEqual(len(filas), 1)
+        self.assertEqual(filas[0]['completados'], 0)
+        self.assertEqual(filas[0]['total'], 2)
+        self.assertContains(respuesta, '0 de 2 pasos')
+        self.assertContains(respuesta, 'Requiere atención')
+
+    def test_faltantes_incluye_evidencias_sin_registrar(self):
+        self._aplicar_modelo()
+
+        respuesta = self.client.get(self.url)
+
+        claves = [falta['clave'] for falta in respuesta.context['faltantes']]
+        self.assertIn('evidencias', claves)
+
+    def test_guarda_el_proyecto_en_la_sesion(self):
+        self.client.get(self.url)
+
+        self.assertEqual(self.client.session[SESSION_KEY], self.proyecto.pk)

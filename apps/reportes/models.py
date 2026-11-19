@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date
 
 from django.core import signing
@@ -60,6 +61,28 @@ class Periodo:
         if nombre is None:
             raise ValueError('Periodo no válido.')
         return cls(nombre)
+
+
+@dataclass(frozen=True)
+class ResumenReporte:
+    """Resumen de solo lectura para el reporte rápido (HU-18).
+
+    No se persiste: la vista lo arma con los valores derivados del proyecto
+    y el template solo lo presenta.
+    """
+
+    salud: float | None = None
+    cumplimiento: float | None = None
+    avance: float | None = None
+    ultima_actividad: date | None = None
+
+    def esta_vacio(self):
+        """True cuando el proyecto todavía no tiene datos para analizar."""
+        return (
+            self.salud is None
+            and self.cumplimiento is None
+            and self.avance is None
+        )
 
 
 class Proyecto(models.Model):
@@ -226,6 +249,48 @@ class Proyecto(models.Model):
 
     def tiene_mediciones(self):
         return self.revisiones().exists()
+
+    def ultima_medicion(self):
+        """Fecha de la revisión de métrica más reciente, o None."""
+        return (
+            self.revisiones()
+            .order_by('-fecha', '-pk')
+            .values_list('fecha', flat=True)
+            .first()
+        )
+
+    def ultima_evidencia(self):
+        """Fecha de la evidencia más reciente de sus técnicas, o None.
+
+        Usa el accessor inverso ``seguimientos_tecnicas``: ``reportes`` no
+        importa el módulo ``tecnicas`` (ver ``CAMBIOS_DIAGRAMAS_CLASES.md``).
+        """
+        return (
+            self.seguimientos_tecnicas.filter(
+                pasos__evidencia__isnull=False
+            )
+            .order_by('-pasos__evidencia__fecha', '-pk')
+            .values_list('pasos__evidencia__fecha', flat=True)
+            .first()
+        )
+
+    def faltantes(self):
+        """Claves de lo que falta para que el reporte tenga datos (HU-18)."""
+        claves = []
+        aplicado = self.modelo_aplicado_vigente()
+        if aplicado is None:
+            claves.append('modelo')
+        elif not aplicado.metricas_aplicadas().filter(activa=True).exists():
+            claves.append('metricas')
+        if not self.tiene_mediciones():
+            claves.append('mediciones')
+        if not self.seguimientos_activos().exists():
+            claves.append('tecnicas')
+        elif not self.seguimientos_tecnicas.filter(
+            pasos__evidencia__isnull=False
+        ).exists():
+            claves.append('evidencias')
+        return claves
 
     @transaction.atomic
     def aplicar_modelo(

@@ -12,6 +12,7 @@ from .views import (
     EliminarProyectoView,
     ListaProyectosView,
     MetricasProyectoView,
+    ReporteProyectoView,
     TableroProyectoView,
 )
 
@@ -21,6 +22,11 @@ urlpatterns = [
     path('', ListaProyectosView.as_view(), name='lista'),
     path('crear/', CrearProyectoView.as_view(), name='crear'),
     path('<int:proyecto_id>/', TableroProyectoView.as_view(), name='tablero'),
+    path(
+        '<int:proyecto_id>/reporte/',
+        ReporteProyectoView.as_view(),
+        name='reporte',
+    ),
     path(
         '<int:proyecto_id>/modelo/',
         AplicarModeloView.as_view(),

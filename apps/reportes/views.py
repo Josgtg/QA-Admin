@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views import View
 
 from apps.modelos.models import EstadoMetrica
@@ -25,6 +26,7 @@ from .models import (
     Periodo,
     Persona,
     Proyecto,
+    ResumenReporte,
     caidas_salud,
     registrar_salud,
     tendencia_salud,
@@ -393,6 +395,198 @@ def resumen_metricas(proyecto, aplicado):
     return filas
 
 
+def tono_salud(salud):
+    """Color del semáforo de salud (compartido por tablero y reporte)."""
+    if salud is None:
+        return 'gray'
+    if salud >= 80:
+        return 'green'
+    if salud >= 60:
+        return 'amber'
+    if salud >= 40:
+        return 'orange'
+    return 'gray'
+
+
+def riesgo_salud(salud):
+    """Etiqueta del riesgo asociado al índice de salud."""
+    if salud is None:
+        return 'Sin datos'
+    if salud >= 80:
+        return 'Bajo'
+    if salud >= 60:
+        return 'Medio'
+    if salud >= 40:
+        return 'Alto'
+    return 'Crítico'
+
+
+DIMENSIONES_REPORTE = (
+    ('ESPECIFICACION', 'Especificación', 'blue'),
+    ('DISENO', 'Diseño', 'purple'),
+    ('DESARROLLO', 'Desarrollo', 'green'),
+    ('CONFORMIDAD', 'Conformidad', 'orange'),
+)
+
+
+class ReporteProyectoView(View):
+    """Reporte rápido del estado del proyecto (HU-18).
+
+    Reúne en una pantalla el índice de salud, el cumplimiento de métricas y el
+    avance de técnicas por dimensión. Primero muestra lo que requiere atención
+    (métricas que no cumplen y técnicas con pasos pendientes) y, si faltan
+    datos, indica qué configurar o registrar.
+    """
+
+    template_name = 'reportes/reporte_rapido.html'
+
+    def get(self, request: HttpRequest, proyecto_id: int) -> HttpResponse:
+        proyecto = get_object_or_404(Proyecto, pk=proyecto_id)
+        seleccionar_proyecto(request, proyecto)
+
+        aplicado = proyecto.modelo_aplicado_vigente()
+        metricas = resumen_metricas(proyecto, aplicado)
+        resumen = self.obtener_resumen(proyecto)
+        ultima_medicion = proyecto.ultima_medicion()
+        ultima_evidencia = proyecto.ultima_evidencia()
+
+        return render(
+            request,
+            self.template_name,
+            {
+                'proyecto': proyecto,
+                'resumen': resumen,
+                'aplicado': aplicado,
+                'metricas': metricas,
+                'metricas_atencion': self.metricas_de_atencion(metricas),
+                'tecnicas_pendientes': self.tecnicas_con_pendientes(proyecto),
+                'dimensiones': self.avance_por_dimension(proyecto),
+                'ultima_medicion': ultima_medicion,
+                'ultima_evidencia': ultima_evidencia,
+                'faltantes': self.faltantes(proyecto),
+                'tono_salud': tono_salud(resumen.salud),
+                'riesgo_salud': riesgo_salud(resumen.salud),
+            },
+        )
+
+    def obtener_resumen(self, proyecto):
+        """Construye el DTO con los tres indicadores y la última actividad."""
+        fechas = [
+            fecha
+            for fecha in (
+                proyecto.ultima_medicion(),
+                proyecto.ultima_evidencia(),
+            )
+            if fecha is not None
+        ]
+        return ResumenReporte(
+            salud=proyecto.indice_salud(),
+            cumplimiento=proyecto.cumplimiento_metricas(),
+            avance=proyecto.avance_tecnicas(),
+            ultima_actividad=max(fechas) if fechas else None,
+        )
+
+    def metricas_de_atencion(self, metricas):
+        """Métricas que no cumplen o que todavía no tienen medición."""
+        return [
+            fila
+            for fila in metricas
+            if fila['valor'] is None or not fila['aceptada']
+        ]
+
+    def tecnicas_con_pendientes(self, proyecto):
+        """Técnicas activas con pasos pendientes y su primer pendiente."""
+        filas = []
+        for seguimiento in proyecto.seguimientos_activos():
+            pendientes = list(
+                seguimiento.pasos_pendientes().select_related('paso')
+            )
+            if not pendientes:
+                continue
+            total = seguimiento.total_pasos()
+            filas.append(
+                {
+                    'seguimiento': seguimiento,
+                    'completados': total - len(pendientes),
+                    'total': total,
+                    'pendientes': pendientes[:3],
+                    'pendientes_total': len(pendientes),
+                }
+            )
+        return filas
+
+    def avance_por_dimension(self, proyecto):
+        """Avance agregado (pasos completados / totales) por dimensión."""
+        seguimientos = list(proyecto.seguimientos_activos())
+        filas = []
+        for valor, etiqueta, color in DIMENSIONES_REPORTE:
+            del_grupo = [
+                seguimiento
+                for seguimiento in seguimientos
+                if seguimiento.tecnica.dimension == valor
+            ]
+            total = sum(
+                seguimiento.total_pasos() for seguimiento in del_grupo
+            )
+            completados = sum(
+                seguimiento.pasos_completados().count()
+                for seguimiento in del_grupo
+            )
+            filas.append(
+                {
+                    'valor': valor,
+                    'etiqueta': etiqueta,
+                    'color': color,
+                    'tecnicas': len(del_grupo),
+                    'completados': completados,
+                    'total': total,
+                    'porcentaje': (
+                        round(completados / total * 100) if total else 0
+                    ),
+                }
+            )
+        return filas
+
+    def faltantes(self, proyecto):
+        """Convierte las claves de ``Proyecto.faltantes()`` en acciones."""
+        acciones = {
+            'modelo': (
+                'Aplicar un modelo de calidad para tener métricas.',
+                'Aplicar modelo',
+                reverse('reportes:aplicar_modelo', args=[proyecto.pk]),
+            ),
+            'metricas': (
+                'El modelo aplicado no tiene métricas activas.',
+                'Revisar métricas',
+                reverse('reportes:metricas', args=[proyecto.pk]),
+            ),
+            'mediciones': (
+                'Registrar al menos una medición de métricas.',
+                'Ir a métricas',
+                reverse('reportes:metricas', args=[proyecto.pk]),
+            ),
+            'tecnicas': (
+                'Seleccionar las técnicas QA del proyecto.',
+                'Elegir técnicas',
+                reverse('tecnicas:catalogo'),
+            ),
+            'evidencias': (
+                'Registrar la evidencia de un paso de las técnicas.',
+                'Ir al seguimiento',
+                reverse('tecnicas:seguimiento'),
+            ),
+        }
+        return [
+            {
+                'clave': clave,
+                'texto': acciones[clave][0],
+                'accion': acciones[clave][1],
+                'url': acciones[clave][2],
+            }
+            for clave in proyecto.faltantes()
+        ]
+
+
 class MetricasProyectoView(View):
     template_name = 'reportes/metricas_proyecto.html'
 
@@ -514,26 +708,10 @@ class TableroProyectoView(View):
         return tendencia_salud(proyecto, limite=self.registros_por_defecto)
 
     def tono_salud(self, salud):
-        if salud is None:
-            return 'gray'
-        if salud >= 80:
-            return 'green'
-        if salud >= 60:
-            return 'amber'
-        if salud >= 40:
-            return 'orange'
-        return 'gray'
+        return tono_salud(salud)
 
     def riesgo_salud(self, salud):
-        if salud is None:
-            return 'Sin datos'
-        if salud >= 80:
-            return 'Bajo'
-        if salud >= 60:
-            return 'Medio'
-        if salud >= 40:
-            return 'Alto'
-        return 'Crítico'
+        return riesgo_salud(salud)
 
     def desplazamiento_anillo(self, salud):
         perimetro = 2 * math.pi * self.radio_anillo
