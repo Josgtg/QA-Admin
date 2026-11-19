@@ -85,25 +85,26 @@ class CatalogoTecnicasViewTests(TestCase):
     def setUp(self):
         self.url = reverse('tecnicas:catalogo')
 
-    def test_catalogo_muestra_las_ocho_tecnicas(self):
+    def test_catalogo_oculta_tecnicas_placeholder(self):
         respuesta = self.client.get(self.url)
-
-        self.assertEqual(respuesta.status_code, 200)
-        self.assertEqual(len(respuesta.context['tecnicas']), 8)
-
-    def test_filtra_por_dimension(self):
-        respuesta = self.client.get(self.url, {'dimension': 'DISENO'})
 
         tecnicas = list(respuesta.context['tecnicas'])
         self.assertEqual(len(tecnicas), 2)
+        self.assertFalse(any(tecnica.es_placeholder() for tecnica in tecnicas))
+        self.assertNotContains(respuesta, 'Técnica por definir')
+        self.assertNotContains(respuesta, 'Por definir')
+
+    def test_filtra_por_dimension(self):
+        respuesta = self.client.get(self.url, {'dimension': 'DESARROLLO'})
+
+        tecnicas = list(respuesta.context['tecnicas'])
+        self.assertEqual(len(tecnicas), 1)
         self.assertTrue(
-            all(tecnica.dimension == 'DISENO' for tecnica in tecnicas)
+            all(tecnica.dimension == 'DESARROLLO' for tecnica in tecnicas)
         )
 
     def test_dimension_sin_tecnicas_muestra_estado_vacio(self):
-        TecnicaQA.objects.filter(dimension='CONFORMIDAD').delete()
-
-        respuesta = self.client.get(self.url, {'dimension': 'CONFORMIDAD'})
+        respuesta = self.client.get(self.url, {'dimension': 'DISENO'})
 
         self.assertContains(respuesta, 'No hay técnicas en esta dimensión')
 
@@ -112,11 +113,6 @@ class CatalogoTecnicasViewTests(TestCase):
 
         self.assertTrue(respuesta.context['sin_proyecto'])
         self.assertContains(respuesta, 'No hay proyectos registrados')
-
-    def test_muestra_etiqueta_por_definir(self):
-        respuesta = self.client.get(self.url)
-
-        self.assertContains(respuesta, 'Por definir')
 
 
 class DetalleTecnicaViewTests(TestCase):

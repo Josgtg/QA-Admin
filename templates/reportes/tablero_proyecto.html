@@ -38,6 +38,10 @@
             <svg class="icon icon-sm"><use href="#i-projects"></use></svg>
             Volver a la lista
         </a>
+        <a class="btn btn-primary" href="{% url 'reportes:exportar_pdf' proyecto.pk %}">
+            <svg class="icon icon-sm"><use href="#i-file-text"></use></svg>
+            Exportar a PDF
+        </a>
         <a class="btn btn-primary" href="{% url 'reportes:editar' proyecto.pk %}">
             <svg class="icon icon-sm"><use href="#i-pencil"></use></svg>
             Editar proyecto

@@ -13,6 +13,7 @@ from .views import (
     MetricasProyectoView,
     TableroProyectoView,
 )
+from .views_pdf import ExportarPDFView
 
 app_name = 'reportes'
 
@@ -49,5 +50,10 @@ urlpatterns = [
         '<int:proyecto_id>/metricas/<int:metrica_id>/revisar/',
         RegistrarRevisionMetricaView.as_view(),
         name='registrar_revision',
+    ),
+    path(
+        '<int:proyecto_id>/pdf/',
+        ExportarPDFView.as_view(),
+        name='exportar_pdf',
     ),
 ]

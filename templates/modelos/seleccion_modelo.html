@@ -70,44 +70,59 @@
 {% endif %}
 
 {% if vigente %}
-<section class="card model-card section-gap">
-    <div class="card-head">
+{% with metricas_aplicadas=vigente.metricas_aplicadas %}
+<section class="card model-card model-option section-gap">
+    <div class="card-head model-card-head">
         <div>
-            <h3>Modelo aplicado</h3>
+            <div class="model-title-row">
+                <h3>Modelo aplicado</h3>
+                <span class="status green">Vigente</span>
+            </div>
             <p class="model-description">
                 {{ vigente.modelo_calidad.descripcion }}
             </p>
         </div>
-        <span class="status green">Vigente</span>
     </div>
 
-    <dl class="detail-list">
-        <dt>Modelo</dt>
-        <dd>{{ vigente.modelo_calidad.nombre }}</dd>
-        <dt>Aplicado desde</dt>
-        <dd>{{ vigente.fecha_aplicacion|date:"d/m/Y" }}</dd>
-        <dt>Características</dt>
-        <dd>
-            {% for caracteristica in vigente.modelo_calidad.obtener_caracteristicas %}
-            <span class="role-tag">{{ caracteristica.nombre }}</span>
-            {% empty %}
-            <span class="muted">Sin características</span>
-            {% endfor %}
-        </dd>
-        <dt>Métricas</dt>
-        <dd>
-            {{ vigente.metricas_aplicadas|length }}
-            métrica{{ vigente.metricas_aplicadas|length|pluralize:"s" }}
-        </dd>
-    </dl>
+    <div class="model-facts">
+        <div class="model-fact">
+            <span>Modelo</span>
+            <strong>{{ vigente.modelo_calidad.nombre }}</strong>
+        </div>
+        <div class="model-fact">
+            <span>Aplicado desde</span>
+            <strong>{{ vigente.fecha_aplicacion|date:"d/m/Y" }}</strong>
+        </div>
+        <div class="model-fact">
+            <span>Métricas</span>
+            <strong>
+                {{ metricas_aplicadas|length }}
+                métrica{{ metricas_aplicadas|length|pluralize:"s" }}
+            </strong>
+        </div>
+    </div>
 
-    <div class="detail-actions">
+    <div class="model-card-body model-card-body-single">
+        <div class="model-block">
+            <h4 class="model-block-title">Características</h4>
+            <div class="model-tags">
+                {% for caracteristica in vigente.modelo_calidad.obtener_caracteristicas %}
+                <span class="model-tag">{{ caracteristica.nombre }}</span>
+                {% empty %}
+                <span class="muted">Sin características</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="detail-actions model-card-actions">
         <a class="btn btn-outline btn-sm" href="{% url 'reportes:metricas' proyecto.pk %}">
             <svg class="icon icon-sm"><use href="#i-metrics"></use></svg>
             Ver métricas y mediciones
         </a>
     </div>
 </section>
+{% endwith %}
 {% else %}
 <section class="card empty-state section-gap">
     <svg class="icon empty-icon"><use href="#i-layers"></use></svg>

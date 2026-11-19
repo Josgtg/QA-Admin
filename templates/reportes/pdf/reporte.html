@@ -1,0 +1,629 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de Calidad - {{ proyecto.nombre }}</title>
+    <style>
+        /* ============================================================
+           ESTILOS BASE PARA PDF (WeasyPrint)
+           ============================================================ */
+
+        @page {
+            size: A4;
+            margin: 2cm 1.5cm 2cm 1.5cm;
+            @bottom-center {
+                content: "Página " counter(page) " de " counter(pages);
+                font-size: 9pt;
+                color: #666;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "DejaVu Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #333;
+            background: white;
+        }
+
+        /* ============================================================
+           ENCABEZADO DEL REPORTE
+           ============================================================ */
+
+        .reporte-header {
+            border-bottom: 3px solid #2c3e50;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+        }
+
+        .reporte-titulo {
+            font-size: 22pt;
+            font-weight: 700;
+            color: #2c3e50;
+            margin: 0 0 4px 0;
+        }
+
+        .reporte-subtitulo {
+            font-size: 11pt;
+            color: #666;
+            margin: 0;
+        }
+
+        .reporte-meta {
+            display: flex;
+            gap: 24px;
+            margin-top: 8px;
+            font-size: 9pt;
+            color: #555;
+        }
+
+        .reporte-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .reporte-meta strong {
+            color: #333;
+        }
+
+        /* ============================================================
+           TARJETA DE ÍNDICE DE SALUD
+           ============================================================ */
+
+        .salud-card {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            border-left: 6px solid var(--tono-color, #95a5a6);
+        }
+
+        .salud-card.green { --tono-color: #27ae60; }
+        .salud-card.amber { --tono-color: #f39c12; }
+        .salud-card.orange { --tono-color: #e67e22; }
+        .salud-card.red { --tono-color: #c0392b; }
+        .salud-card.gray { --tono-color: #95a5a6; }
+
+        .salud-indice {
+            font-size: 48pt;
+            font-weight: 700;
+            color: var(--tono-color, #95a5a6);
+            line-height: 1;
+            margin: 0;
+        }
+
+        .salud-detalles {
+            flex: 1;
+        }
+
+        .salud-riesgo {
+            font-size: 11pt;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--tono-color, #95a5a6);
+            margin: 0 0 8px 0;
+        }
+
+        .salud-label {
+            font-size: 9pt;
+            color: #666;
+            margin: 0;
+        }
+
+        /* ============================================================
+           SECCIONES GENERALES
+           ============================================================ */
+
+        .seccion {
+            margin-bottom: 28px;
+        }
+
+        .seccion-titulo {
+            font-size: 13pt;
+            font-weight: 700;
+            color: #2c3e50;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .seccion-titulo::before {
+            content: "";
+            width: 4px;
+            height: 18px;
+            background: #3498db;
+            border-radius: 2px;
+        }
+
+        .seccion-vacia {
+            padding: 20px;
+            text-align: center;
+            color: #999;
+            font-style: italic;
+            background: #fafafa;
+            border-radius: 6px;
+            border: 1px dashed #ddd;
+        }
+
+        /* ============================================================
+           TABLAS
+           ============================================================ */
+
+        .tabla-contenedor {
+            overflow-x: auto;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+        }
+
+        thead {
+            background: #2c3e50;
+            color: white;
+        }
+
+        th {
+            padding: 10px 8px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 8.5pt;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        td {
+            padding: 8px;
+            border-top: 1px solid #eee;
+            vertical-align: top;
+        }
+
+        tbody tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        tbody tr:hover {
+            background: #f0f7ff;
+        }
+
+        /* Colores de estado */
+        .estado-cumple { color: #27ae60; font-weight: 600; }
+        .estado-no-cumple { color: #c0392b; font-weight: 600; }
+        .estado-sin-medicion { color: #95a5a6; font-style: italic; }
+        .estado-completada { color: #27ae60; font-weight: 600; }
+        .estado-pendiente { color: #e67e22; font-weight: 600; }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 7.5pt;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-green { background: #e8f8f0; color: #27ae60; }
+        .badge-amber { background: #fef9e7; color: #f39c12; }
+        .badge-orange { background: #fdf2e9; color: #e67e22; }
+        .badge-red { background: #fdedec; color: #c0392b; }
+        .badge-gray { background: #f2f3f4; color: #95a5a6; }
+        .badge-blue { background: #ebf5fb; color: #3498db; }
+
+        /* ============================================================
+           DETALLE DE TÉCNICAS (PASOS)
+           ============================================================ */
+
+        .tecnica-detalle {
+            margin-top: 8px;
+            padding: 12px;
+            background: #fafafa;
+            border-radius: 6px;
+            border: 1px solid #eee;
+            page-break-inside: avoid;
+        }
+
+        .tecnica-pasos {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .tecnica-paso {
+            margin: 6px 0;
+            padding: 8px 10px;
+            background: white;
+            border-radius: 4px;
+            border-left: 3px solid #ddd;
+            font-size: 8.5pt;
+        }
+
+        .tecnica-paso.completado {
+            border-left-color: #27ae60;
+            background: #f0fff4;
+        }
+
+        .tecnica-paso.pendiente {
+            border-left-color: #e67e22;
+            background: #fff8f0;
+        }
+
+        .paso-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .paso-numero {
+            font-weight: 700;
+            color: #666;
+            min-width: 24px;
+        }
+
+        .paso-estado {
+            font-size: 7.5pt;
+            padding: 1px 6px;
+            border-radius: 10px;
+        }
+
+        .paso-instruccion {
+            margin-left: 32px;
+            color: #444;
+        }
+
+        .paso-evidencia {
+            margin-left: 32px;
+            font-size: 8pt;
+            color: #666;
+        }
+
+        .paso-comentario {
+            margin-left: 32px;
+            margin-top: 4px;
+            padding: 4px 8px;
+            background: #f0f0f0;
+            border-radius: 3px;
+            font-size: 8pt;
+            color: #555;
+            font-style: italic;
+        }
+
+        /* ============================================================
+           ITEMS DE ATENCIÓN
+           ============================================================ */
+
+        .atencion-lista {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .atencion-item {
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            border-left: 5px solid;
+            background: #fafafa;
+            page-break-inside: avoid;
+        }
+
+        .atencion-item.metrica {
+            border-left-color: #c0392b;
+            background: #fdf2f2;
+        }
+
+        .atencion-item.tecnica {
+            border-left-color: #e67e22;
+            background: #fef5e7;
+        }
+
+        .atencion-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 6px;
+        }
+
+        .atencion-tipo {
+            font-size: 7.5pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 10px;
+            white-space: nowrap;
+        }
+
+        .atencion-tipo.metrica { background: #fadbd8; color: #c0392b; }
+        .atencion-tipo.tecnica { background: #fad7a0; color: #e67e22; }
+
+        .atencion-nombre {
+            font-weight: 600;
+            color: #2c3e50;
+            flex: 1;
+        }
+
+        .atencion-detalle {
+            font-size: 9pt;
+            color: #555;
+            margin-left: 40px;
+        }
+
+        /* ============================================================
+           EQUIPO
+           ============================================================ */
+
+        .equipo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 8px;
+        }
+
+        .equipo-miembro {
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #eee;
+            font-size: 9pt;
+        }
+
+        .equipo-nombre { font-weight: 600; color: #2c3e50; }
+        .equipo-rol { color: #666; font-size: 8.5pt; }
+
+        /* ============================================================
+           UTILIDADES
+           ============================================================ */
+
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .text-muted { color: #999; font-size: 8.5pt; }
+        .fw-bold { font-weight: 700; }
+        .mt-1 { margin-top: 4px; }
+        .mt-2 { margin-top: 8px; }
+        .mb-1 { margin-bottom: 4px; }
+        .mb-2 { margin-bottom: 8px; }
+
+        .page-break-before { page-break-before: always; }
+        .page-break-avoid { page-break-inside: avoid; }
+
+        /* ============================================================
+           PIE DE PÁGINA ADICIONAL
+           ============================================================ */
+
+        .reporte-footer {
+            margin-top: 30px;
+            padding-top: 16px;
+            border-top: 1px solid #eee;
+            font-size: 8pt;
+            color: #999;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- ============================================================
+         ENCABEZADO
+         ============================================================ -->
+    <header class="reporte-header">
+        <h1 class="reporte-titulo">Reporte de Calidad</h1>
+        <p class="reporte-subtitulo">{{ proyecto.nombre }}</p>
+        <div class="reporte-meta">
+            <span><strong>Periodo:</strong> {{ proyecto.fecha_inicio|date:"d/m/Y" }} – {{ proyecto.fecha_fin|date:"d/m/Y" }} ({{ proyecto.periodo }})</span>
+            <span><strong>Generado:</strong> {{ fecha_generacion|date:"d/m/Y" }}</span>
+            <span><strong>Índice de salud:</strong> {% if indice_salud is not None %}{{ indice_salud|floatformat:1 }}%{% else %}Sin datos{% endif %}</span>
+        </div>
+    </header>
+
+    <!-- ============================================================
+         ÍNDICE DE SALUD
+         ============================================================ -->
+    <section class="seccion">
+        <div class="salud-card {{ tono_salud }}">
+            <div class="salud-indice">{% if indice_salud is not None %}{{ indice_salud|floatformat:1 }}%{% else %}—{% endif %}</div>
+            <div class="salud-detalles">
+                <p class="salud-riesgo">Riesgo: {{ riesgo_salud }}</p>
+                <p class="salud-label">Promedio ponderado entre avance de técnicas y cumplimiento de métricas</p>
+                {% if ultima_actualizacion %}
+                <p class="salud-label mt-1">Última actualización: {{ ultima_actualizacion|date:"d/m/Y H:i" }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================
+         QUÉ NECESITA ATENCIÓN (PRIMERO SEGÚN HU-21)
+         ============================================================ -->
+    <section class="seccion">
+        <h2 class="seccion-titulo">⚠ Requiere atención</h2>
+        {% if items_atencion %}
+        <ul class="atencion-lista">
+            {% for item in items_atencion %}
+            <li class="atencion-item {{ item.tipo|lower }} page-break-avoid">
+                <div class="atencion-header">
+                    <div>
+                        <span class="atencion-tipo {{ item.tipo|lower }}">{{ item.tipo }}</span>
+                        <span class="atencion-nombre">{{ item.nombre }}</span>
+                    </div>
+                </div>
+                <p class="atencion-detalle">{{ item.detalle }}</p>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="seccion-vacia">✓ No hay items que requieran atención en este momento.</div>
+        {% endif %}
+    </section>
+
+    <!-- ============================================================
+         MÉTRICAS
+         ============================================================ -->
+    <section class="seccion">
+        <h2 class="seccion-titulo">Métricas de calidad</h2>
+        {% if metricas %}
+        <div class="tabla-contenedor">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Métrica</th>
+                        <th style="width: 18%;">Característica</th>
+                        <th style="width: 15%;">Meta</th>
+                        <th style="width: 12%;">Último valor</th>
+                        <th style="width: 12%;">Estado</th>
+                        <th style="width: 13%;">Evidencia</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in metricas %}
+                    <tr>
+                        <td>{{ m.nombre }}</td>
+                        <td>{{ m.caracteristica }}</td>
+                        <td>{{ m.meta }}</td>
+                        <td>
+                            {% if m.ultimo_valor is not None %}
+                                {{ m.ultimo_valor|floatformat:2 }} {{ m.unidad }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if m.estado == "Cumple" %}
+                                <span class="estado-cumple badge badge-green">✓ Cumple</span>
+                            {% elif m.estado == "No cumple" %}
+                                <span class="estado-no-cumple badge badge-red">✗ No cumple</span>
+                            {% else %}
+                                <span class="estado-sin-medicion badge badge-gray">○ Sin medición</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if m.tiene_evidencia %}
+                                <span class="badge badge-blue">Sí</span>
+                            {% else %}
+                                <span class="badge badge-gray">No</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="seccion-vacia">No hay métricas configuradas. Aplique un modelo de calidad al proyecto.</div>
+        {% endif %}
+    </section>
+
+    <!-- ============================================================
+         TÉCNICAS QA
+         ============================================================ -->
+    <section class="seccion">
+        <h2 class="seccion-titulo">Técnicas de QA seleccionadas</h2>
+        {% if tecnicas %}
+        <div class="tabla-contenedor">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 28%;">Técnica</th>
+                        <th style="width: 15%;">Dimensión</th>
+                        <th style="width: 15%;">Tipo control</th>
+                        <th style="width: 12%;">Avance</th>
+                        <th style="width: 12%;">Estado</th>
+                        <th style="width: 18%;">Pasos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in tecnicas %}
+                    <tr>
+                        <td>{{ t.nombre }}</td>
+                        <td>{{ t.dimension }}</td>
+                        <td>{{ t.tipo_control }}</td>
+                        <td>{{ t.porcentaje_avance|floatformat:1 }}%</td>
+                        <td>
+                            {% if t.esta_completada %}
+                                <span class="estado-completada badge badge-green">✓ Completada</span>
+                            {% else %}
+                                <span class="estado-pendiente badge badge-amber">⟳ Pendiente</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ t.pasos|length }} pasos</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Detalle de pasos por técnica -->
+        {% for t in tecnicas %}
+        <div class="tecnica-detalle page-break-avoid mt-2">
+            <div class="fw-bold mb-1">{{ t.nombre }} <span class="text-muted">({{ t.dimension }} / {{ t.tipo_control }})</span></div>
+            <div class="text-muted mb-1">Avance: {{ t.porcentaje_avance|floatformat:1 }}% — {{ t.pasos|length }} pasos totales</div>
+            <div class="tecnica-pasos">
+                {% for p in t.pasos %}
+                <div class="tecnica-paso {% if p.completado %}completado{% else %}pendiente{% endif %}">
+                    <div class="paso-header">
+                        <span class="paso-numero">{{ p.orden }}.</span>
+                        <span class="paso-estado {% if p.completado %}badge badge-green{% else %}badge badge-amber{% endif %}">
+                            {% if p.completado %}Completado{% else %}Pendiente{% endif %}
+                        </span>
+                    </div>
+                    <div class="paso-instruccion">{{ p.instruccion }}</div>
+                    <div class="paso-evidencia">
+                        {% if p.tiene_evidencia %}
+                            ✓ Evidencia registrada {% if p.fecha_completado %}el {{ p.fecha_completado|date:"d/m/Y H:i" }}{% endif %}
+                        {% else %}
+                            ✗ Sin evidencia
+                        {% endif %}
+                    </div>
+                    {% if p.comentario %}
+                    <div class="paso-comentario">{{ p.comentario }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="seccion-vacia">No hay técnicas seleccionadas para este proyecto.</div>
+        {% endif %}
+    </section>
+
+    <!-- ============================================================
+         EQUIPO
+         ============================================================ -->
+    <section class="seccion">
+        <h2 class="seccion-titulo">Equipo del proyecto</h2>
+        {% if equipo %}
+        <div class="equipo-grid">
+            {% for miembro in equipo %}
+            <div class="equipo-miembro">
+                <div class="equipo-nombre">{{ miembro.persona.nombre }}</div>
+                <div class="equipo-rol">{{ miembro.rol }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="seccion-vacia">No hay miembros registrados en el proyecto.</div>
+        {% endif %}
+    </section>
+
+    <!-- ============================================================
+         PIE DE PÁGINA
+         ============================================================ -->
+    <footer class="reporte-footer">
+        <p>Reporte generado automáticamente por QA-Admin el {{ fecha_generacion|date:"d/m/Y" }}</p>
+        <p>Los datos reflejan el estado del proyecto al momento de la generación.</p>
+    </footer>
+</body>
+</html>

@@ -95,7 +95,10 @@ class CatalogoTecnicasView(View):
         return redirect('tecnicas:catalogo')
 
     def listar_tecnicas(self):
-        return TecnicaQA.objects.all()
+        """Técnicas con contenido definitivo, sin marcadores provisionales."""
+        return TecnicaQA.objects.exclude(
+            descripcion__startswith='[PENDIENTE]'
+        )
 
     def filtrar_por_dimension(self, dimension=''):
         tecnicas = self.listar_tecnicas()
@@ -104,11 +107,12 @@ class CatalogoTecnicasView(View):
         return tecnicas
 
     def dimensiones_disponibles(self):
+        tecnicas = self.listar_tecnicas()
         return [
             {
                 'valor': valor,
                 'etiqueta': etiqueta,
-                'total': TecnicaQA.objects.filter(dimension=valor).count(),
+                'total': tecnicas.filter(dimension=valor).count(),
                 **DIMENSION_META[valor],
             }
             for valor, etiqueta in Dimension.choices
