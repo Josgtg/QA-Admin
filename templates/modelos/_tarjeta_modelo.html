@@ -3,50 +3,61 @@ Tarjeta resumen de un modelo de calidad (HU-02).
 
 Se usa en la pantalla de selección. El catálogo (HU-03) usa la tabla detallada.
 {% endcomment %}
-<section class="card model-card section-gap">
-    <div class="card-head">
+{% with metricas=modelo.obtener_modelo_metricas %}
+<section class="card model-card model-option section-gap">
+    <div class="card-head model-card-head">
         <div>
-            <h3>
-                {{ modelo.nombre }}
-                {% if modelo.es_propio %}
-                <span class="status amber">Propio</span>
+            <div class="model-title-row">
+                <h3>
+                    {{ modelo.nombre }}
+                    {% if modelo.es_propio %}
+                    <span class="status amber">Propio</span>
+                    {% endif %}
+                </h3>
+                <span class="model-count">
+                    {{ metricas|length }} métrica{{ metricas|length|pluralize:"s" }}
+                </span>
+                {% if aplicado and aplicado.modelo_calidad_id == modelo.pk %}
+                <span class="status green">Aplicado</span>
                 {% endif %}
-            </h3>
+            </div>
             <p class="model-description">{{ modelo.descripcion }}</p>
         </div>
-        {% if aplicado and aplicado.modelo_calidad_id == modelo.pk %}
-        <span class="status green">Aplicado</span>
-        {% else %}
-        <span class="head-muted">
-            {{ modelo.obtener_modelo_metricas|length }} métrica{{ modelo.obtener_modelo_metricas|length|pluralize:"s" }}
-        </span>
-        {% endif %}
     </div>
 
-    <dl class="detail-list">
-        <dt>Características</dt>
-        <dd>
-            {% for caracteristica in modelo.obtener_caracteristicas %}
-            <span class="role-tag">{{ caracteristica.nombre }}</span>
-            {% empty %}
-            <span class="muted">Sin características</span>
-            {% endfor %}
-        </dd>
-        <dt>Umbrales</dt>
-        <dd>
-            {% for mm in modelo.obtener_modelo_metricas %}
-            <div class="cell-sub">
-                {{ mm.metrica.nombre }}:
-                {% if mm.tipo_umbral == 'MINIMO' %}≥{% else %}≤{% endif %}
-                {{ mm.umbral|floatformat:'-2' }} {{ mm.metrica.unidad }}
+    <div class="model-card-body">
+        <div class="model-block">
+            <h4 class="model-block-title">Características</h4>
+            <div class="model-tags">
+                {% for caracteristica in modelo.obtener_caracteristicas %}
+                <span class="model-tag">{{ caracteristica.nombre }}</span>
+                {% empty %}
+                <span class="muted">Sin características</span>
+                {% endfor %}
             </div>
-            {% empty %}
-            <span class="muted">Este modelo no tiene métricas configuradas.</span>
-            {% endfor %}
-        </dd>
-    </dl>
+        </div>
 
-    <div class="detail-actions">
+        <div class="model-block">
+            <h4 class="model-block-title">Umbrales</h4>
+            {% if metricas %}
+            <ul class="threshold-list">
+                {% for mm in metricas %}
+                <li class="threshold-item">
+                    <span class="threshold-name">{{ mm.metrica.nombre }}</span>
+                    <span class="threshold-value">
+                        {% if mm.tipo_umbral == 'MINIMO' %}≥{% else %}≤{% endif %}
+                        {{ mm.umbral|floatformat:'-2' }} {{ mm.metrica.unidad }}
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <span class="muted">Este modelo no tiene métricas configuradas.</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="detail-actions model-card-actions">
         <form method="post" action="{% url 'reportes:aplicar_modelo' proyecto.pk %}">
             {% csrf_token %}
             <input type="hidden" name="modelo_id" value="{{ modelo.pk }}">
@@ -62,3 +73,4 @@ Se usa en la pantalla de selección. El catálogo (HU-03) usa la tabla detallada
         </form>
     </div>
 </section>
+{% endwith %}

@@ -1,0 +1,180 @@
+@startuml hu21_secuencia
+hide footbox
+skinparam sequence {
+  ArrowColor #444444
+  ActorBorderColor #444444
+  ActorBackgroundColor #FAEEDA
+  ParticipantBorderColor #444444
+  ParticipantBackgroundColor White
+  LifeLineBackgroundColor White
+  LifeLineBorderColor #444444
+  BoxBackgroundColor #FFF0E0
+  BoxBorderColor #444444
+}
+
+title Diagrama de Secuencia — HU-21 Generar reporte PDF
+
+actor "Encargado QA" as QA
+
+box "Navegador" #FAEEDA
+participant "Pestaña Tablero/\nDetalle Proyecto" as Navegador
+end box
+
+box "Django Views" #FFF0E0
+participant "ExportarPDFView" as ExportarPDFView
+end box
+
+box "Servicios" #FFF0E0
+participant "ReportePDFService" as ReportePDFService
+participant "DatosReportePDF" as DatosReportePDF
+end box
+
+box "Modelos (ORM)" #EEEDFE
+participant "Proyecto" as Proyecto
+participant "MiembroProyecto" as MiembroProyecto
+participant "ModeloAplicado" as ModeloAplicado
+participant "MetricaAplicada" as MetricaAplicada
+participant "Metrica" as Metrica
+participant "RevisionMetrica" as RevisionMetrica
+participant "SeguimientoTecnica" as SeguimientoTecnica
+participant "TecnicaQA" as TecnicaQA
+participant "SeguimientoPaso" as SeguimientoPaso
+participant "Evidencia" as Evidencia
+participant "RegistroSalud" as RegistroSalud
+participant "DetalleSalud" as DetalleSalud
+end box
+
+box "Librería PDF" #E1F5EE
+participant "WeasyPrint\n(HTML → PDF)" as WeasyPrint
+end box
+
+== Inicio: Usuario pulsa "Exportar a PDF" ==
+QA -> Navegador: Clic en "Exportar a PDF"
+Navegador -> ExportarPDFView: GET /proyectos/<id>/pdf/
+
+== ExportarPDFView ==
+activate ExportarPDFView
+ExportarPDFView -> Proyecto: get_object_or_404(pk=proyecto_id)
+Proyecto --> ExportarPDFView: proyecto
+
+ExportarPDFView -> ReportePDFService: new ReportePDFService(proyecto)
+activate ReportePDFService
+
+== ReportePDFService.generar() ==
+ReportePDFService -> DatosReportePDF: recopilar(proyecto)
+activate DatosReportePDF
+
+== DatosReportePDF.recopilar() - Una sola pasada consistente ==
+DatosReportePDF -> Proyecto: proyecto.indice_salud()
+Proyecto --> DatosReportePDF: Float (0-100) o None
+
+DatosReportePDF -> Proyecto: proyecto.equipo_activo()
+Proyecto -> MiembroProyecto: filter(activo=True).select_related('persona')
+MiembroProyecto --> Proyecto: QuerySet[MiembroProyecto]
+Proyecto --> DatosReportePDF: equipo
+
+DatosReportePDF -> Proyecto: proyecto.modelo_aplicado_vigente()
+Proyecto -> ModeloAplicado: filter(vigente=True).first()
+ModeloAplicado --> Proyecto: ModeloAplicado o None
+Proyecto --> DatosReportePDF: aplicado
+
+alt Modelo aplicado existe
+    DatosReportePDF -> ModeloAplicado: metricas_aplicadas().filter(activa=True)
+    ModeloAplicado -> MetricaAplicada: filter(activa=True).select_related('metrica__caracteristica')
+    MetricaAplicada --> ModeloAplicado: QuerySet[MetricaAplicada]
+    ModeloAplicado --> DatosReportePDF: metricas_aplicadas
+
+    loop Para cada MetricaAplicada
+        DatosReportePDF -> MetricaAplicada: metrica (via select_related)
+        MetricaAplicada --> DatosReportePDF: Metrica
+        DatosReportePDF -> Metrica: ultima_revision(proyecto)
+        Metrica -> RevisionMetrica: filter(metrica_aplicada__modelo_aplicado__proyecto=proyecto, metrica_aplicada__metrica=self).order_by('-fecha').first()
+        RevisionMetrica --> Metrica: RevisionMetrica o None
+        Metrica --> DatosReportePDF: ultima_revision
+        DatosReportePDF -> Metrica: esta_aceptada(proyecto)
+        Metrica -> MetricaAplicada: instantanea_vigente(proyecto)
+        MetricaAplicada --> Metrica: MetricaAplicada
+        Metrica -> RevisionMetrica: ultimo_valor (via ultima_revision)
+        RevisionMetrica --> Metrica: valor
+        Metrica -> MetricaAplicada: evaluar_cumplimiento(valor)
+        MetricaAplicada --> Metrica: BOOLEAN
+        Metrica --> DatosReportePDF: BOOLEAN (cumple/no cumple)
+    end
+else No hay modelo aplicado
+    DatosReportePDF --> DatosReportePDF: metricas = []
+end
+
+DatosReportePDF -> Proyecto: proyecto.seguimientos_activos()
+Proyecto -> SeguimientoTecnica: filter(activa=True).select_related('tecnica')
+SeguimientoTecnica --> Proyecto: QuerySet[SeguimientoTecnica]
+Proyecto --> DatosReportePDF: seguimientos
+
+loop Para cada SeguimientoTecnica
+    DatosReportePDF -> SeguimientoTecnica: tecnica (via select_related)
+    SeguimientoTecnica --> DatosReportePDF: TecnicaQA
+    DatosReportePDF -> SeguimientoTecnica: total_pasos()
+    SeguimientoTecnica -> SeguimientoPaso: count()
+    SeguimientoPaso --> SeguimientoTecnica: INTEGER
+    SeguimientoTecnica --> DatosReportePDF: total
+    DatosReportePDF -> SeguimientoTecnica: pasos_completados().count()
+    SeguimientoTecnica -> SeguimientoPaso: filter(completado=True).count()
+    SeguimientoPaso --> SeguimientoTecnica: INTEGER
+    SeguimientoTecnica --> DatosReportePDF: completados
+    DatosReportePDF -> SeguimientoTecnica: calcular_porcentaje_avance()
+    SeguimientoTecnica --> DatosReportePDF: FLOAT
+    DatosReportePDF -> SeguimientoTecnica: esta_completada()
+    SeguimientoTecnica -> SeguimientoPaso: filter(completado=False).exists()
+    SeguimientoPaso --> SeguimientoTecnica: BOOLEAN
+    SeguimientoTecnica --> DatosReportePDF: BOOLEAN
+end
+
+DatosReportePDF -> Proyecto: proyecto.registros_salud.order_by('-fecha').first()
+Proyecto -> RegistroSalud: order_by('-fecha').first()
+RegistroSalud --> Proyecto: RegistroSalud o None
+Proyecto --> DatosReportePDF: ultimo_registro
+
+alt Hay registro de salud
+    DatosReportePDF -> RegistroSalud: detalles.all()
+    RegistroSalud -> DetalleSalud: all()
+    DetalleSalud --> RegistroSalud: QuerySet[DetalleSalud]
+    RegistroSalud --> DatosReportePDF: detalles
+else No hay registro
+    DatosReportePDF --> DatosReportePDF: ultima_actualizacion = None
+end
+
+DatosReportePDF --> ReportePDFService: DatosReportePDF (objeto completo)
+
+== Generación del PDF con WeasyPrint ==
+ReportePDFService -> ReportePDFService: _recopilar_datos() → DatosReportePDF
+ReportePDFService -> ReportePDFService: _renderizar_html(datos) → str (HTML)
+note right of ReportePDFService
+  Usa template Django 'reportes/pdf/reporte.html'
+  con context = datos.__dict__
+  Incluye CSS para tabla, colores, page-break-inside: avoid
+end note
+
+ReportePDFService -> WeasyPrint: HTML(string=html, base_url=request.build_absolute_uri('/'))
+activate WeasyPrint
+
+WeasyPrint -> ReportePDFService: write_pdf(buffer)
+deactivate WeasyPrint
+
+note right of ReportePDFService
+  items_atencion = [
+    *metricas_no_cumplen (ordenadas por desviación desc),
+    *tecnicas_pendientes (ordenadas por % avance asc)
+  ]
+  Cada item: {tipo, nombre, detalle, severidad}
+end note
+
+ReportePDFService --> ExportarPDFView: buffer (BytesIO con PDF)
+deactivate ReportePDFService
+
+== Respuesta HTTP ==
+ExportarPDFView -> Navegador: HttpResponse(buffer.getvalue(),\n  content_type='application/pdf',\n  headers={'Content-Disposition':\n   'attachment; filename="reporte-{nombre}-{fecha}.pdf"'})
+deactivate ExportarPDFView
+
+Navegador -> QA: Descarga archivo PDF
+
+== Fin ==
+@enduml

@@ -15,6 +15,7 @@ from .views import (
     ReporteProyectoView,
     TableroProyectoView,
 )
+from .views_pdf import ExportarPDFView
 
 app_name = 'reportes'
 
@@ -61,5 +62,10 @@ urlpatterns = [
         '<int:proyecto_id>/revisiones/<int:revision_id>/evidencia/',
         DescargarEvidenciaMetricaView.as_view(),
         name='descargar_evidencia_metrica',
+    ),
+    path(
+        '<int:proyecto_id>/pdf/',
+        ExportarPDFView.as_view(),
+        name='exportar_pdf',
     ),
 ]

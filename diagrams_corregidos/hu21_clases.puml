@@ -1,0 +1,291 @@
+@startuml hu21_clases
+hide circle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam nodesep 50
+skinparam ranksep 55
+skinparam packageStyle rectangle
+skinparam class {
+  BackgroundColor White
+  BorderColor #444444
+  ArrowColor #444444
+}
+
+title Diagrama de Clases — HU-21 Generar reporte PDF (apps: reportes, modelos, tecnicas)
+
+package "reportes" #FAEEDA {
+  class Proyecto {
+    + id: BIGINT
+    + nombre: VARCHAR
+    + fecha_inicio: DATE
+    + fecha_fin: DATE
+    --
+    + periodo(): Periodo
+    + indice_salud(): Float
+    + avance_tecnicas(): Float
+    + cumplimiento_metricas(): Float
+    + estado_metricas(): List[Tuple[str, Float]]
+    + equipo_activo(): QuerySet[MiembroProyecto]
+    + seguimientos_activos(): QuerySet[SeguimientoTecnica]
+    + modelo_aplicado_vigente(): ModeloAplicado
+  }
+
+  class MiembroProyecto {
+    + id: BIGINT
+    + proyecto_id: BIGINT
+    + persona_id: BIGINT
+    + rol: VARCHAR
+    + activo: BOOLEAN
+    --
+    + persona: Persona
+  }
+
+  class Persona {
+    + id: BIGINT
+    + nombre: VARCHAR
+  }
+
+  class RegistroSalud {
+    + id: BIGINT
+    + proyecto_id: BIGINT
+    + fecha: DATE
+    + indice: FLOAT
+    + actualizado: DATETIME
+    --
+    + detalles: QuerySet[DetalleSalud]
+  }
+
+  class DetalleSalud {
+    + id: BIGINT
+    + registro_id: BIGINT
+    + tipo: VARCHAR  "TECNICA | METRICA"
+    + nombre: VARCHAR
+    + valor: FLOAT
+  }
+}
+
+package "modelos" #EEEDFE {
+  class ModeloAplicado {
+    + id: BIGINT
+    + proyecto_id: BIGINT
+    + modelo_calidad_id: BIGINT
+    + fecha_aplicacion: DATE
+    + fecha_cierre: DATE
+    + vigente: BOOLEAN
+    --
+    + metricas_aplicadas(): QuerySet[MetricaAplicada]
+  }
+
+  class MetricaAplicada {
+    + id: BIGINT
+    + modelo_aplicado_id: BIGINT
+    + metrica_id: BIGINT
+    + umbral: FLOAT
+    + tipo_umbral: VARCHAR
+    + activa: BOOLEAN
+    --
+    + metrica: Metrica
+    + evaluar_cumplimiento(valor: FLOAT): BOOLEAN
+    + revisiones(): QuerySet[RevisionMetrica]
+  }
+
+  class Metrica {
+    + id: BIGINT
+    + caracteristica_id: BIGINT
+    + nombre: VARCHAR
+    + descripcion: TEXT
+    + unidad: VARCHAR
+    + valor_min: FLOAT
+    + valor_max: FLOAT
+    --
+    + caracteristica: Caracteristica
+    + rango_esperado(): str
+    + ultima_revision(proyecto: Proyecto): RevisionMetrica
+    + ultimo_valor(proyecto: Proyecto): FLOAT
+    + esta_aceptada(proyecto: Proyecto): BOOLEAN
+    + instantanea_vigente(proyecto: Proyecto): MetricaAplicada
+  }
+
+  class Caracteristica {
+    + id: BIGINT
+    + nombre: VARCHAR
+    + descripcion: TEXT
+    --
+    + obtener_metricas(): QuerySet[Metrica]
+    + calcular_seguimiento(proyecto: Proyecto): Float
+  }
+
+  class RevisionMetrica {
+    + id: BIGINT
+    + metrica_aplicada_id: BIGINT
+    + miembro_proyecto_id: BIGINT
+    + valor: FLOAT
+    + fecha: DATE
+    + enlace: VARCHAR
+    + archivo: VARCHAR
+    + cumple: BOOLEAN
+    --
+    + tiene_evidencia(): BOOLEAN
+  }
+
+  class ModeloCalidad {
+    + id: BIGINT
+    + nombre: VARCHAR
+    + descripcion: TEXT
+    + predefinido: BOOLEAN
+  }
+}
+
+package "tecnicas" #E1F5EE {
+  class TecnicaQA {
+    + id: BIGINT
+    + nombre: VARCHAR
+    + descripcion: TEXT
+    + objetivo: TEXT
+    + pregunta_clave: TEXT
+    + dimension: VARCHAR
+    + tipo_control: VARCHAR
+    --
+    + obtener_pasos(): QuerySet[Paso]
+  }
+
+  class Paso {
+    + id: BIGINT
+    + tecnica_qa_id: BIGINT
+    + orden: INTEGER
+    + instruccion: TEXT
+    + evidencia_esperada: TEXT
+  }
+
+  class SeguimientoTecnica {
+    + id: BIGINT
+    + proyecto_id: BIGINT
+    + tecnica_qa_id: BIGINT
+    + porcentaje_avance: FLOAT
+    + activa: BOOLEAN
+    --
+    + tecnica: TecnicaQA
+    + pasos_completados(): QuerySet[SeguimientoPaso]
+    + pasos_pendientes(): QuerySet[SeguimientoPaso]
+    + total_pasos(): INTEGER
+    + calcular_porcentaje_avance(): FLOAT
+    + esta_completada(): BOOLEAN
+  }
+
+  class SeguimientoPaso {
+    + id: BIGINT
+    + seguimiento_tecnica_id: BIGINT
+    + paso_id: BIGINT
+    + completado: BOOLEAN
+    + comentario: TEXT
+    + fecha_completado: DATETIME
+    --
+    + paso: Paso
+    + evidencia_segura(): Evidencia
+    + tiene_evidencia(): BOOLEAN
+    + esta_completado(): BOOLEAN
+  }
+
+  class Evidencia {
+    + id: BIGINT
+    + seguimiento_paso_id: BIGINT
+    + miembro_proyecto_id: BIGINT
+    + enlace: VARCHAR
+    + archivo: VARCHAR
+    + fecha: DATE
+    + fecha_registro: DATETIME
+    --
+    + tiene_enlace_o_archivo(): BOOLEAN
+    + descripcion(): str
+  }
+}
+
+package "reportes.services" #FFF0E0 {
+  class ReportePDFService {
+    - proyecto: Proyecto
+    - datos: DatosReportePDF
+    - html_template: str
+    --
+    + __init__(proyecto: Proyecto)
+    + generar() -> BytesIO
+    - _recopilar_datos() -> DatosReportePDF
+    - _renderizar_html(datos: DatosReportePDF) -> str
+    - _html_a_pdf(html: str) -> BytesIO
+  }
+
+  class DatosReportePDF {
+    + proyecto: Proyecto
+    + fecha_generacion: DATE
+    + indice_salud: Float
+    + tono_salud: str
+    + riesgo_salud: str
+    + metricas: List[Dict]
+    + tecnicas: List[Dict]
+    + items_atencion: List[Dict]
+    + ultima_actualizacion: DATETIME
+    + equipo: List[MiembroProyecto]
+    --
+    + recopilar(proyecto: Proyecto) -> DatosReportePDF
+  }
+}
+
+package "reportes.views" #FFF0E0 {
+  class ExportarPDFView {
+    - proyecto: Proyecto
+    --
+    + get(request, proyecto_id): HttpResponse
+    - _generar_respuesta_pdf(buffer: BytesIO, proyecto: Proyecto): HttpResponse
+  }
+}
+
+' Relaciones existentes (resumidas)
+Proyecto ||--o{ MiembroProyecto : "equipo"
+MiembroProyecto }|--|| Persona : "persona"
+Proyecto ||--o{ RegistroSalud : "registros_salud"
+RegistroSalud ||--o{ DetalleSalud : "detalles"
+Proyecto ||--o{ ModeloAplicado : "modelos_aplicados"
+ModeloAplicado ||--|{ MetricaAplicada : "instantaneas"
+MetricaAplicada }|--|| Metrica : "metrica"
+Metrica }|--|| Caracteristica : "caracteristica"
+MetricaAplicada ||--o{ RevisionMetrica : "revisiones"
+RevisionMetrica }|--|| MiembroProyecto : "autor"
+Proyecto ||--o{ SeguimientoTecnica : "seguimientos_tecnicas"
+SeguimientoTecnica }|--|| TecnicaQA : "tecnica"
+TecnicaQA ||--|{ Paso : "pasos"
+SeguimientoTecnica ||--|{ SeguimientoPaso : "pasos"
+SeguimientoPaso }|--|| Paso : "paso"
+SeguimientoPaso ||--o| Evidencia : "evidencia"
+Evidencia }|--|| MiembroProyecto : "autor"
+
+' Nuevas relaciones HU-21
+ExportarPDFView ..> ReportePDFService : usa
+ReportePDFService ..> DatosReportePDF : usa
+ReportePDFService ..> Proyecto : consulta
+DatosReportePDF ..> Proyecto : consulta
+DatosReportePDF ..> MiembroProyecto : consulta
+DatosReportePDF ..> SeguimientoTecnica : consulta
+DatosReportePDF ..> MetricaAplicada : consulta
+DatosReportePDF ..> RevisionMetrica : consulta
+DatosReportePDF ..> Evidencia : consulta
+
+note right of ReportePDFService
+  Genera el PDF con WeasyPrint (HTML → PDF).
+  Usa template Django + CSS para layout.
+  _renderizar_html() usa 'reportes/pdf/reporte.html'.
+  _html_a_pdf() convierte HTML a PDF en buffer BytesIO.
+end note
+
+note right of DatosReportePDF
+  Objeto inmutable que recopila TODOS los datos
+  necesarios para el PDF en una sola pasada.
+  Evita consultas N+1 y garantiza consistencia
+  entre lo que se ve en pantalla y el PDF.
+end note
+
+note right of ExportarPDFView
+  URL: /proyectos/<id>/pdf/
+  Nombre archivo: "reporte-{proyecto}-{fecha}.pdf"
+  Content-Disposition: attachment
+end note
+
+@enduml
