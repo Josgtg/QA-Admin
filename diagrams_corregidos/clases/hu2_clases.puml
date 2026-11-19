@@ -54,7 +54,7 @@ package "modelos.model" #EEEDFE {
     - nombre: String
     - descripcion: String
     - predefinido: boolean
-    + {static} obtener_predefinidos(): List<ModeloCalidad>
+    + {static} disponibles(): List<ModeloCalidad>
     + obtener_caracteristicas(): List<Caracteristica>
     + obtener_modelo_metricas(): List<ModeloMetrica>
   }
@@ -168,10 +168,10 @@ note bottom of Proyecto
 end note
 
 note bottom of ModeloCalidad
-  En HU-02 solo se ofrecen los modelos con
-  predefinido = true; los modelos propios
-  llegan en HU-16. Las características se
-  infieren recorriendo ModeloMetrica, Metrica
+  HU-02 ofrece los modelos disponibles:
+  los predefinidos y los propios con al menos
+  una métrica activa (HU-16). Las características
+  se infieren recorriendo ModeloMetrica, Metrica
   y Caracteristica; no hay composición directa
   entre ModeloCalidad y Caracteristica.
 end note

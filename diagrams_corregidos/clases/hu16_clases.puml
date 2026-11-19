@@ -1,0 +1,194 @@
+@startuml hu16_clases
+allowmixing
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype polyline
+skinparam packageStyle rectangle
+skinparam nodesep 70
+skinparam ranksep 90
+top to bottom direction
+
+title Clases: definir métricas y modelos propios de calidad (HU-16)
+
+actor "Encargado de QA" as Encargado
+
+package "modelos.template" #EEEDFE {
+  class CatalogoModelosTemplate {
+    + abrir(): void
+    + mostrar_modelo_propio(modelo: ModeloCalidad): void
+  }
+
+  class CrearModeloTemplate {
+    + abrir(): void
+    + enviar(modelo: ModeloCalidadForm, metricas: MetricasFormSet): void
+    + agregar_metrica(): void
+  }
+}
+
+package "modelos.view" #EEEDFE {
+  class CatalogoModelosView {
+    + get(request: HttpRequest): HttpResponse
+    + obtener_modelos(): List<ModeloCalidad>
+    + obtener_detalle(modelo_id: int): ModeloCalidad
+  }
+
+  class CrearModeloPropioView {
+    + get(request: HttpRequest): HttpResponse
+    + post(request: HttpRequest): HttpResponse
+    - _render(request: HttpRequest, modelo_form: ModeloCalidadForm, metricas_formset: MetricasFormSet): HttpResponse
+  }
+
+  class EliminarModeloPropioView {
+    + post(request: HttpRequest, pk: int): HttpResponse
+  }
+
+  class ModeloCalidadForm {
+    - nombre: String
+    - descripcion: String
+    + clean_nombre(): String
+  }
+
+  class MetricaPropiaForm {
+    - caracteristica: String
+    - nombre: String
+    - descripcion: String
+    - forma_medicion: String
+    - unidad: String
+    - meta: Float
+    - tipo_umbral: TipoUmbral
+  }
+
+  class MetricasFormSet {
+    + min_num: int = 1
+    + validate_min: boolean = true
+  }
+}
+
+package "reportes.model" #FAEEDA {
+  class Proyecto {
+    - id: int
+    - nombre: String
+    + aplicar_modelo(modelo_calidad: ModeloCalidad): ModeloAplicado
+  }
+}
+
+package "modelos.model" #EEEDFE {
+  enum TipoUmbral {
+    MINIMO
+    MAXIMO
+  }
+
+  class ModeloCalidad {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - predefinido: boolean
+    + {static} disponibles(): List<ModeloCalidad>
+    + guardar_con_metricas(filas: List<dict>): ModeloCalidad
+    + es_propio(): boolean
+    + proyectos_que_lo_usan(): List<String>
+    + obtener_modelo_metricas(): List<ModeloMetrica>
+  }
+
+  class Caracteristica {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    + obtener_metricas(): List<Metrica>
+  }
+
+  class Metrica {
+    - id: int
+    - nombre: String
+    - descripcion: String
+    - forma_medicion: String
+    - unidad: String
+    - valor_min: Float
+    - valor_max: Float
+    + validar_rango(valor: Float): boolean
+  }
+
+  class ModeloMetrica {
+    - id: int
+    - umbral: Float
+    - tipo_umbral: TipoUmbral
+    - activa: boolean
+    + evaluar_cumplimiento(valor: Float): boolean
+    + esta_activa(): boolean
+  }
+
+  class ModeloAplicado {
+    - id: int
+    - fecha_aplicacion: Date
+    - fecha_cierre: Date
+    - vigente: boolean
+    + es_vigente(): boolean
+  }
+}
+
+ModeloCalidad "1" *-- "1..*" ModeloMetrica : contiene
+Caracteristica "1" *-- "0..*" Metrica : agrupa
+Metrica "1" --> "0..*" ModeloMetrica : se configura en
+ModeloCalidad "1" --> "0..*" ModeloAplicado : se usa en
+Proyecto "1" --> "0..*" ModeloAplicado : historial de aplicaciones
+ModeloMetrica --> TipoUmbral
+
+Encargado ..> CatalogoModelosTemplate : consulta
+Encargado ..> CrearModeloTemplate : crea modelo
+CatalogoModelosTemplate ..> CatalogoModelosView : solicita catálogo
+CrearModeloTemplate ..> CrearModeloPropioView : solicita alta
+CatalogoModelosView ..> ModeloCalidad : lista disponibles
+CrearModeloPropioView ..> ModeloCalidadForm : valida datos
+CrearModeloPropioView ..> MetricasFormSet : valida métricas
+MetricasFormSet ..> MetricaPropiaForm : crea filas
+CrearModeloPropioView ..> ModeloCalidad : guarda modelo y métricas
+CatalogoModelosTemplate ..> EliminarModeloPropioView : solicita baja
+EliminarModeloPropioView ..> ModeloCalidad : verifica uso y elimina
+
+note top of CrearModeloPropioView
+  CA1 · El modelo nuevo exige nombre,
+  descripción y al menos una característica
+  con una métrica. El formset usa
+  min_num = 1 y validate_min = true.
+  CA2 · La métrica exige forma de medir,
+  unidad y meta. La meta y su dirección
+  viven en ModeloMetrica.
+end note
+
+note right of ModeloCalidadForm
+  CA3 · No se aceptan dos modelos con el
+  mismo nombre. clean_nombre() compara sin
+  distinguir mayúsculas y muestra el error
+  sobre el campo nombre.
+end note
+
+note bottom of ModeloCalidad
+  CA4 · disponibles() devuelve los modelos
+  predefinidos y los propios con al menos
+  una métrica activa. Así el modelo propio
+  aparece junto a los predefinidos en el
+  catálogo y se puede aplicar al proyecto.
+  guardar_con_metricas() crea el modelo, busca
+  o crea la característica, crea la métrica y
+  su ModeloMetrica dentro de una transacción.
+end note
+
+note bottom of EliminarModeloPropioView
+  CA5 · Un modelo que usa algún proyecto no
+  se puede borrar: ModeloAplicado usa
+  on_delete = PROTECT. La vista consulta
+  proyectos_que_lo_usan() y muestra sus
+  nombres. Un modelo libre se elimina junto
+  con sus métricas huérfanas.
+  Los modelos con predefinido = true no se
+  pueden eliminar (la vista responde 404).
+end note
+
+note bottom of ModeloMetrica
+  tipo_umbral define la dirección de la meta:
+  MINIMO exige valor >= umbral;
+  MAXIMO exige valor <= umbral.
+  La instantánea MetricaAplicada copia este
+  umbral al aplicar el modelo (HU-02).
+end note
+@enduml

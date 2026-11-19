@@ -6,7 +6,12 @@ Se usa en la pantalla de selección. El catálogo (HU-03) usa la tabla detallada
 <section class="card model-card section-gap">
     <div class="card-head">
         <div>
-            <h3>{{ modelo.nombre }}</h3>
+            <h3>
+                {{ modelo.nombre }}
+                {% if modelo.es_propio %}
+                <span class="status amber">Propio</span>
+                {% endif %}
+            </h3>
             <p class="model-description">{{ modelo.descripcion }}</p>
         </div>
         {% if aplicado and aplicado.modelo_calidad_id == modelo.pk %}
