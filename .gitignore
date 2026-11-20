@@ -8,3 +8,4 @@ media/
 
 # Contexto local para IA (no versionar)
 /AGENTS.md
+staticfiles/

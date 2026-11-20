@@ -1,0 +1,9 @@
+.git
+.venv
+__pycache__
+db.sqlite3
+db.sqlite3.bak-*
+media
+staticfiles
+diagrams
+diagrams_corregidos
