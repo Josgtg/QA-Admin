@@ -103,6 +103,25 @@ existen, avisa y termina. Para borrarlos y volver a crearlos:
 python manage.py seed_demo --reset
 ```
 
+## Despliegue en Render
+
+El repositorio incluye un `Dockerfile` y un `render.yaml`. La imagen instala las
+bibliotecas de WeasyPrint, junta los estáticos, aplica las migraciones y carga
+`seed_demo`, así que el sitio siempre arranca con los cuatro proyectos de
+demostración. Lo que se cambie en línea se pierde al redeplegar o cuando el
+plan gratuito reinicia el servicio, y vuelve a quedar con los datos de prueba.
+
+1. En [Render](https://render.com), **New → Blueprint** y elegir este repositorio.
+2. Render lee `render.yaml`, crea el servicio `qa-admin` y genera `DJANGO_SECRET_KEY`.
+3. Cada push a `main` vuelve a desplegar.
+
+Para probar la misma imagen en local:
+
+```bash
+docker build -t qa-admin .
+docker run -p 8000:8000 -e DJANGO_ALLOWED_HOSTS=localhost qa-admin
+```
+
 ## Flujo de trabajo con Git
 
 - `main`: versión estable.
